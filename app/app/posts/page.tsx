@@ -2,10 +2,15 @@ import { FileText } from 'lucide-react'
 import { requireAccountId } from '@/lib/auth/session'
 import { listPosts } from '@/lib/db/posts'
 import { PostsView } from '@/components/posts/posts-view'
+import { cn } from '@/lib/utils'
 
 export default async function PostsPage() {
   const { accountId } = await requireAccountId()
   const posts = await listPosts(accountId)
+
+  const posted = posts.filter((p) => p.status === 'posted').length
+  const approved = posts.filter((p) => p.status === 'approved').length
+  const drafts = posts.filter((p) => p.status === 'draft').length
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -17,6 +22,14 @@ export default async function PostsPage() {
             their real engagement. Edit, log results, and mark what you publish;
             results feed the skill&rsquo;s improvement loop.
           </p>
+          {posts.length > 0 ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Stat label="Posted" value={posted} tone="posted" />
+              {approved > 0 ? <Stat label="Approved" value={approved} tone="approved" /> : null}
+              <Stat label="Drafts" value={drafts} tone="draft" />
+              <span className="text-xs text-neutral-400">{posts.length} total</span>
+            </div>
+          ) : null}
         </header>
 
         {posts.length === 0 ? (
@@ -48,5 +61,33 @@ export default async function PostsPage() {
         )}
       </div>
     </div>
+  )
+}
+
+const STAT_TONES: Record<'posted' | 'approved' | 'draft', string> = {
+  posted: 'bg-emerald-50 text-emerald-700',
+  approved: 'bg-blue-50 text-blue-700',
+  draft: 'bg-neutral-100 text-neutral-600',
+}
+
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number
+  tone: 'posted' | 'approved' | 'draft'
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+        STAT_TONES[tone],
+      )}
+    >
+      <span className="tabular-nums">{value}</span>
+      <span className="font-normal opacity-80">{label}</span>
+    </span>
   )
 }

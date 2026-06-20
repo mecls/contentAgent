@@ -21,7 +21,10 @@ export interface CompetitorPostFeatures {
   lead_magnet?: string
   cta?: string
   voice?: string
+  /** Free-text format label as the model described it. */
   format?: string
+  /** Normalized format key from the platform catalog (lib/formats/catalog.ts). */
+  format_key?: string
   length_words?: number
   why_it_worked?: string
 }

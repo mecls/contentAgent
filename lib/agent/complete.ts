@@ -11,10 +11,12 @@ export async function completeJSON<T = unknown>(args: {
   system: string
   user: string
   maxTokens?: number
+  /** Override the model (defaults to LLM_MODEL — the fast tier). */
+  model?: string
 }): Promise<T | null> {
   const client = openai()
   const res = await client.chat.completions.create({
-    model: llmModel(),
+    model: args.model ?? llmModel(),
     max_tokens: args.maxTokens ?? llmMaxTokens(),
     messages: [
       { role: 'system', content: args.system },

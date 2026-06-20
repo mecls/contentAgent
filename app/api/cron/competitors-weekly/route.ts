@@ -2,6 +2,7 @@ import { type NextRequest } from 'next/server'
 import { env } from '@/lib/env'
 import { listAccountIdsWithCompetitors } from '@/lib/db/competitors'
 import { runCompetitorAnalysisForAccount } from '@/lib/integrations/run-competitors'
+import { suggestPostMixForAccount } from '@/lib/integrations/suggest-mix'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -25,13 +26,23 @@ export async function POST(req: NextRequest) {
 
   const ran: Array<Record<string, unknown>> = []
   for (const accountId of accountIds) {
+    const entry: Record<string, unknown> = { accountId }
+    // Competitor extraction first so format-trend analysis reads the freshest posts…
     try {
-      const r = await runCompetitorAnalysisForAccount(accountId)
-      ran.push({ accountId, ok: true, ...r })
+      entry.competitors = await runCompetitorAnalysisForAccount(accountId)
     } catch (e) {
       console.error(`[cron/competitors] account ${accountId} failed`, e)
-      ran.push({ accountId, ok: false, error: e instanceof Error ? e.message : 'error' })
+      entry.competitorsError = e instanceof Error ? e.message : 'error'
     }
+    // …then build the weekly content plan from the refreshed format trends.
+    try {
+      const plan = await suggestPostMixForAccount(accountId)
+      entry.plan = { planId: plan.planId, created: plan.created }
+    } catch (e) {
+      console.error(`[cron/competitors] plan failed for ${accountId}`, e)
+      entry.planError = e instanceof Error ? e.message : 'error'
+    }
+    ran.push(entry)
   }
   return Response.json({ ran })
 }

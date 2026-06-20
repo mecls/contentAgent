@@ -1,5 +1,5 @@
 import type OpenAI from 'openai'
-import { openai, llmModel, llmMaxTokens } from './llm'
+import { openai, llmModelHeavy, llmMaxTokens } from './llm'
 import { SYSTEM_PROMPT } from './system-prompt'
 import { CONTENT_TOOLS } from './tools'
 import { runScopedTool, type ToolContext } from './run-scoped-tool'
@@ -24,6 +24,14 @@ export interface AgentLoopArgs {
   history?: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
   /** Aborts the in-flight LLM calls when the client disconnects. */
   signal?: AbortSignal
+  /** Preview mode: save_post emits the draft for review instead of persisting it. */
+  dryRun?: boolean
+  /**
+   * Orchestrator model for the loop. Defaults to the HEAVY tier (glm-5.2). The
+   * weekly-review cron overrides this to the fast tier to stay cheap; the actual
+   * post prose is always delegated to the fast model via the write_content tool.
+   */
+  model?: string
 }
 
 interface AccumulatedToolCall {
@@ -50,22 +58,37 @@ export async function runAgentLoop({
   systemNotes = [],
   history = [],
   signal,
+  dryRun,
+  model,
 }: AgentLoopArgs): Promise<string> {
   const client = openai()
+  const loopModel = model ?? llmModelHeavy()
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...systemNotes.map((content) => ({ role: 'system' as const, content })),
     ...history,
     { role: 'user', content: prompt },
   ]
-  const toolCtx: ToolContext = { accountId, conversationId, emit: emitEvent }
   let finalText = ''
+  const toolCtx: ToolContext = {
+    accountId,
+    conversationId,
+    emit: emitEvent,
+    dryRun,
+    signal,
+    // write_content streams the writer model's prose straight to the UI AND folds
+    // it into finalText, so the post appears live and survives a chat reload.
+    emitText: (text) => {
+      finalText += text
+      emit?.(text)
+    },
+  }
 
   for (let i = 0; i < MAX_ITERS; i++) {
     if (signal?.aborted) break
     const stream = await client.chat.completions.create(
       {
-        model: llmModel(),
+        model: loopModel,
         max_tokens: llmMaxTokens(),
         messages,
         tools: CONTENT_TOOLS,

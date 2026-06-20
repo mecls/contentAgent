@@ -1,4 +1,5 @@
 import { runAgentLoop } from '@/lib/agent/agent-loop'
+import { llmModelFast } from '@/lib/agent/llm'
 import { buildSkillsIndexNote } from '@/lib/skills/store'
 import { createConversation, addMessage } from '@/lib/db/conversations'
 import type { SyncResult } from '@/lib/integrations/sync-posts'
@@ -61,6 +62,8 @@ export async function runWeeklyReview(
     accountId,
     conversationId,
     systemNotes: skillsNote ? [skillsNote] : [],
+    // Automated cron — keep it on the cheap model; it only logs lessons + a summary.
+    model: llmModelFast(),
   })
 
   await addMessage(accountId, conversationId, {

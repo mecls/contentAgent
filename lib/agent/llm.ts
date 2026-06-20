@@ -23,6 +23,16 @@ export function llmModel(): string {
   return env.llmModel()
 }
 
+/** Agentic orchestrator model — drives the interactive chat loop (glm-5.2). */
+export function llmModelHeavy(): string {
+  return env.llmModelHeavy()
+}
+
+/** Worker/writer model — the post prose (write_content) + cron tasks (gpt-oss). */
+export function llmModelFast(): string {
+  return env.llmModelFast()
+}
+
 export function llmMaxTokens(): number {
   return env.llmMaxTokens()
 }

@@ -59,11 +59,25 @@ export const CreateSkillInput = z.object({
 })
 export type CreateSkillInput = z.infer<typeof CreateSkillInput>
 
+// ── content writing (delegated to the fast/writer model) ─────────────────────────
+export const WriteContentInput = z.object({
+  brief: z.string().min(1),
+  platform: z.string().optional(),
+  archetype: z.string().optional(),
+  format: z.string().optional(),
+  voice: z.string().optional(),
+  constraints: z.string().optional(),
+  source_material: z.string().optional(),
+  notes: z.string().optional(),
+})
+export type WriteContentInput = z.infer<typeof WriteContentInput>
+
 // ── posts ──────────────────────────────────────────────────────────────────────
 export const SavePostInput = z.object({
   body: z.string().min(1),
   hook: z.string().optional(),
   archetype: z.string().optional(),
+  format: z.string().optional(),
   status: z.enum(['draft', 'approved', 'posted']).optional(),
   skill_slug: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -103,6 +117,21 @@ export const LearnWritingStyleInput = z.object({
   skill_slug: z.string().optional(),
 })
 export type LearnWritingStyleInput = z.infer<typeof LearnWritingStyleInput>
+
+// ── format analysis & weekly planning ────────────────────────────────────────
+export const AnalyzeFormatTrendsInput = z.object({
+  platform: z.string().optional(),
+})
+export type AnalyzeFormatTrendsInput = z.infer<typeof AnalyzeFormatTrendsInput>
+
+export const GetFormatPerformanceInput = z.object({})
+
+export const PlanContentWeekInput = z.object({
+  platform: z.string().optional(),
+  count: z.number().int().min(1).max(8).optional(),
+  horizon_days: z.number().int().min(1).max(30).optional(),
+})
+export type PlanContentWeekInput = z.infer<typeof PlanContentWeekInput>
 
 // ── analytics (LinkedIn scrape) ──────────────────────────────────────────────
 export const ReconcileAnalyticsInput = z.object({})
@@ -227,6 +256,54 @@ export const CONTENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'write_content',
+      description:
+        "Generate the actual POST BODY. YOU orchestrate; THIS tool writes — never write a post body yourself, always produce prose through here. Call it only AFTER you've read the skill (constraints + voice + references/voice-reference.md + references/preferences.md) and decided the angle, archetype, and format. The writer model has NO access to the skill, the creator profile, the research, or this conversation, so you MUST pass everything it needs in the parameters — a vague brief yields a generic post. It returns the finished plain-text body, which is ALREADY shown to the creator (do not paste it again). Then review it against the constraints and call save_post with that body verbatim (only fix a real violation). For revisions the creator asks for, call write_content again with the change in `notes`.",
+      parameters: {
+        type: 'object',
+        properties: {
+          brief: {
+            type: 'string',
+            description:
+              'What the post must say: the core message, angle, key points, and any structure to follow. Be specific and complete — this is the writer\'s only source of intent.',
+          },
+          platform: { type: 'string', description: "Platform, e.g. 'linkedin', 'x'." },
+          archetype: {
+            type: 'string',
+            description: 'The narrative archetype from the skill the post should follow.',
+          },
+          format: {
+            type: 'string',
+            description: "Structural format, e.g. 'text-short', 'text-long', 'carousel', 'poll'.",
+          },
+          voice: {
+            type: 'string',
+            description:
+              'The voice to match, distilled from SKILL.md + references/voice-reference.md: sentence rhythm, hook style, formatting, CTA pattern. Quote the concrete rules — the writer cannot read the skill.',
+          },
+          constraints: {
+            type: 'string',
+            description:
+              'The hard constraints the writer must not violate, from the skill constraints file + references/preferences.md (honesty rules, banned words, length limits).',
+          },
+          source_material: {
+            type: 'string',
+            description:
+              'Facts to ground the post in (article details from search_news, research items). The writer must add no facts beyond these.',
+          },
+          notes: {
+            type: 'string',
+            description:
+              'Extra instructions, or revision feedback when regenerating an earlier draft (e.g. "punchier hook", "drop the emoji").',
+          },
+        },
+        required: ['brief'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'save_post',
       description:
         "Save a finished post so it appears in the user's Posts library. Call this whenever you produce a post the user might publish. `body` is the full post text exactly as it should be published; `hook` is the opening line; `archetype` is which skill archetype it follows (if any). `tags` are 2-5 short lowercase keyword tags describing the post's topic and style (e.g. [\"ai\",\"hiring\",\"contrarian\"]) — REUSE the keywords from the EXISTING POST TAGS note when one fits, so engagement stays comparable across posts.",
@@ -236,6 +313,11 @@ export const CONTENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           body: { type: 'string', description: 'The full post text, ready to publish.' },
           hook: { type: 'string', description: 'The opening line / hook.' },
           archetype: { type: 'string', description: 'Archetype name from the skill, if applicable.' },
+          format: {
+            type: 'string',
+            description:
+              "The post's structural format key (e.g. 'carousel', 'text-short', 'text-long', 'poll', 'image-text'). Set this whenever the post follows a specific format — especially when drafting from a weekly plan that assigned one — so format performance stays comparable.",
+          },
           status: { type: 'string', enum: ['draft', 'approved', 'posted'] },
           skill_slug: { type: 'string', description: 'The skill used to write it.' },
           tags: {
@@ -363,6 +445,50 @@ export const CONTENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         type: 'object',
         properties: {
           count: { type: 'number', description: 'How many ideas to generate (1-8, default 4).' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'analyze_format_trends',
+      description:
+        "Show which structural FORMATS (carousel, short text, poll, video…) are working RIGHT NOW on a platform — aggregated from competitor posts and ranked by recent engagement, each with a rising/steady/falling direction and its share of recent posts. 'Format' is the post's container, distinct from its topic (tags) and narrative archetype. Grounded in real scraped engagement, not opinion. Use when planning content or when the creator asks what formats/styles are trending. Defaults to LinkedIn.",
+      parameters: {
+        type: 'object',
+        properties: {
+          platform: {
+            type: 'string',
+            description: "Platform id (e.g. 'linkedin', 'x', 'instagram'). Defaults to linkedin.",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_format_performance',
+      description:
+        "Compare the creator's OWN engagement across the formats they've used — per format, the post count and average reactions/comments/engagement rate. Use it to see which formats THIS creator personally wins at (analyze_format_trends is competitors; this is them). Only posts that have a saved format are counted.",
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'plan_content_week',
+      description:
+        "Build a WEEKLY CONTENT PLAN — a balanced COMBINATION of posts, each assigned a format + topic + day — and save it to the creator's Plan page. Combines trending formats, the creator's own format wins, research, topics, and pending ideas, favoring formats that are trending and/or that the creator over-performs in, plus one 'explore' slot. Each plan item becomes a draftable idea card. Use when the creator asks to plan their week, wants a content mix, or wants format recommendations across several posts. (To draft a single post, use save_post; to brainstorm topic-only ideas without formats/days, use generate_ideas.)",
+      parameters: {
+        type: 'object',
+        properties: {
+          platform: { type: 'string', description: 'Platform id (default linkedin).' },
+          count: { type: 'number', description: 'How many posts in the plan (1-8, default 4).' },
+          horizon_days: { type: 'number', description: 'Days the plan spans (default 7).' },
         },
         required: [],
       },

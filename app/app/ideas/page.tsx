@@ -6,7 +6,8 @@ import { GenerateIdeasButton } from '@/components/ideas/generate-button'
 
 export default async function IdeasPage() {
   const { accountId } = await requireAccountId()
-  const pending = await listIdeas(accountId, 'pending')
+  // Standalone ideas only — ideas tied to a weekly plan live on the Plan page.
+  const pending = (await listIdeas(accountId, 'pending')).filter((i) => !i.plan_id)
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">

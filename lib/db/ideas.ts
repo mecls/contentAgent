@@ -15,6 +15,13 @@ export interface IdeaRow {
   hook: string | null
   rationale: string | null
   sources: string[]
+  /** Structural format key (lib/formats/catalog.ts) — set on weekly-plan items. */
+  format: string | null
+  platform: string | null
+  /** Suggested publish date (weekly-plan items). */
+  planned_for: string | null
+  /** Links the idea to the content plan it belongs to, if any. */
+  plan_id: string | null
   status: IdeaStatus
   post_id: string | null
   created_at: string
@@ -27,7 +34,14 @@ export interface IdeaInput {
   hook?: string | null
   rationale?: string | null
   sources?: string[]
+  format?: string | null
+  platform?: string | null
+  planned_for?: string | null
+  plan_id?: string | null
 }
+
+const IDEA_COLUMNS =
+  'id, topic, angle, structure, hook, rationale, sources, format, platform, planned_for, plan_id, status, post_id, created_at'
 
 export async function createIdeas(accountId: string, ideas: IdeaInput[]): Promise<number> {
   const rows = ideas
@@ -40,6 +54,10 @@ export async function createIdeas(accountId: string, ideas: IdeaInput[]): Promis
       hook: i.hook ?? null,
       rationale: i.rationale ?? null,
       sources: i.sources ?? [],
+      format: i.format ?? null,
+      platform: i.platform ?? null,
+      planned_for: i.planned_for ?? null,
+      plan_id: i.plan_id ?? null,
       status: 'pending' as const,
     }))
   if (rows.length === 0) return 0
@@ -51,7 +69,7 @@ export async function createIdeas(accountId: string, ideas: IdeaInput[]): Promis
 export async function listIdeas(accountId: string, status?: IdeaStatus): Promise<IdeaRow[]> {
   let q = supabaseService()
     .from('content_post_ideas')
-    .select('id, topic, angle, structure, hook, rationale, sources, status, post_id, created_at')
+    .select(IDEA_COLUMNS)
     .eq('account_id', accountId)
     .order('created_at', { ascending: false })
   if (status) q = q.eq('status', status)
@@ -60,10 +78,22 @@ export async function listIdeas(accountId: string, status?: IdeaStatus): Promise
   return (data ?? []) as IdeaRow[]
 }
 
+/** Ideas belonging to one content plan, ordered by their suggested publish date. */
+export async function listIdeasByPlan(accountId: string, planId: string): Promise<IdeaRow[]> {
+  const { data, error } = await supabaseService()
+    .from('content_post_ideas')
+    .select(IDEA_COLUMNS)
+    .eq('account_id', accountId)
+    .eq('plan_id', planId)
+    .order('planned_for', { ascending: true })
+  if (error) throw new Error(`listIdeasByPlan failed: ${error.message}`)
+  return (data ?? []) as IdeaRow[]
+}
+
 export async function getIdea(accountId: string, id: string): Promise<IdeaRow | null> {
   const { data, error } = await supabaseService()
     .from('content_post_ideas')
-    .select('id, topic, angle, structure, hook, rationale, sources, status, post_id, created_at')
+    .select(IDEA_COLUMNS)
     .eq('account_id', accountId)
     .eq('id', id)
     .maybeSingle()
@@ -88,11 +118,13 @@ export async function setIdeaStatus(
 }
 
 export async function countPendingIdeas(accountId: string): Promise<number> {
+  // Standalone ideas only — plan-linked items are surfaced on the Plan page.
   const { count, error } = await supabaseService()
     .from('content_post_ideas')
     .select('id', { count: 'exact', head: true })
     .eq('account_id', accountId)
     .eq('status', 'pending')
+    .is('plan_id', null)
   if (error) throw new Error(`countPendingIdeas failed: ${error.message}`)
   return count ?? 0
 }

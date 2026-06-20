@@ -1,5 +1,6 @@
 import { scrapeProfilePosts } from '@/lib/integrations/apify'
 import { completeJSON } from '@/lib/agent/complete'
+import { DEFAULT_PLATFORM, formatsForPlatform, normalizeFormatKey } from '@/lib/formats/catalog'
 import {
   listCompetitors,
   upsertCompetitorPosts,
@@ -11,22 +12,37 @@ import {
  * Weekly competitor analysis for one account: reuse the existing LinkedIn post
  * scraper for each curated competitor, then run a structured LLM pass per post to
  * extract WHY it works (hook, tone, structure, topic, lead magnet/CTA, voice,
- * format…). Stored as a swipe-file the idea generator reads.
+ * format…). Stored as a swipe-file the idea + format-trend generators read.
  */
 
-const FEATURE_SYSTEM =
-  'You analyze a LinkedIn post and extract the reusable craft behind it. Return ONLY JSON with keys: hook (the opening line verbatim or its pattern), tone, structure (e.g. story, listicle, contrarian-take, how-to, announcement), topic, lead_magnet (what they offer, or null), cta (the call to action, or null), voice (1-3 adjectives), format (e.g. short, long-form, carousel-caption, poll), length_words (integer), why_it_worked (one sentence). No commentary.'
+/** System prompt for feature extraction, with the platform's format catalog injected. */
+function featureSystem(platform: string): string {
+  const defs = formatsForPlatform(platform)
+  const list = defs.map((d) => `${d.key} (${d.label})`).join('; ')
+  return [
+    'You analyze a social post and extract the reusable craft behind it.',
+    'Return ONLY JSON with keys: hook (the opening line verbatim or its pattern), tone, structure (e.g. story, listicle, contrarian-take, how-to, announcement), topic, lead_magnet (what they offer, or null), cta (the call to action, or null), voice (1-3 adjectives), format (free-text label, e.g. short, long-form, carousel-caption, poll), format_key (THE single allowed key below whose structural format best matches this post), length_words (integer), why_it_worked (one sentence). No commentary.',
+    `Allowed format_key values: ${list}.`,
+  ].join('\n')
+}
 
 export async function extractPostFeatures(
   content: string,
   metrics: { reactions?: number; comments?: number; reposts?: number },
+  platform: string = DEFAULT_PLATFORM,
 ): Promise<CompetitorPostFeatures> {
   const parsed = await completeJSON<CompetitorPostFeatures>({
-    system: FEATURE_SYSTEM,
+    system: featureSystem(platform),
     user: `Engagement: ${metrics.reactions ?? 0} reactions, ${metrics.comments ?? 0} comments, ${metrics.reposts ?? 0} reposts.\n\nPost:\n${content.slice(0, 4000)}`,
     maxTokens: 600,
   })
-  return parsed ?? {}
+  const features = parsed ?? {}
+  // Pin format_key to a canonical catalog key (the model may answer loosely, or
+  // only fill the free-text `format`). Drop it if nothing plausibly matches.
+  const key = normalizeFormatKey(platform, features.format_key ?? features.format)
+  if (key) features.format_key = key
+  else delete features.format_key
+  return features
 }
 
 export interface CompetitorRunResult {

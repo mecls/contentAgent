@@ -16,6 +16,8 @@ export interface PostRow {
   hook: string | null
   body: string
   archetype: string | null
+  /** Structural format (normalized catalog key from lib/formats/catalog.ts). */
+  format: string | null
   status: 'draft' | 'approved' | 'posted'
   skill_slug: string | null
   linkedin_url: string | null
@@ -27,6 +29,10 @@ export interface PostRow {
   updated_at: string
   posted_at: string | null
 }
+
+/** Columns selected for a full PostRow. */
+const POST_COLUMNS =
+  'id, conversation_id, hook, body, archetype, format, status, skill_slug, linkedin_url, image_url, metrics, tags, source, created_at, updated_at, posted_at'
 
 /**
  * Normalize free-form tags into stable keywords so engagement can be compared
@@ -47,9 +53,7 @@ export function normalizeTags(input: readonly string[] | null | undefined): stri
 export async function listPosts(accountId: string): Promise<PostRow[]> {
   const { data, error } = await supabaseService()
     .from('content_posts')
-    .select(
-      'id, conversation_id, hook, body, archetype, status, skill_slug, linkedin_url, image_url, metrics, tags, source, created_at, updated_at, posted_at',
-    )
+    .select(POST_COLUMNS)
     .eq('account_id', accountId)
     .order('created_at', { ascending: false })
   if (error) throw new Error(`listPosts failed: ${error.message}`)
@@ -62,9 +66,7 @@ export async function getPost(
 ): Promise<PostRow | null> {
   const { data, error } = await supabaseService()
     .from('content_posts')
-    .select(
-      'id, conversation_id, hook, body, archetype, status, skill_slug, linkedin_url, image_url, metrics, tags, source, created_at, updated_at, posted_at',
-    )
+    .select(POST_COLUMNS)
     .eq('account_id', accountId)
     .eq('id', id)
     .maybeSingle()
@@ -78,6 +80,7 @@ export async function createPost(
     hook?: string | null
     body: string
     archetype?: string | null
+    format?: string | null
     status?: 'draft' | 'approved' | 'posted'
     skill_slug?: string | null
     conversation_id?: string | null
@@ -98,6 +101,7 @@ export async function createPost(
       hook: post.hook ?? null,
       body: post.body,
       archetype: post.archetype ?? null,
+      format: post.format ?? null,
       status: post.status ?? 'draft',
       skill_slug: post.skill_slug ?? null,
       conversation_id: post.conversation_id ?? null,
@@ -230,6 +234,44 @@ export async function tagPerformance(accountId: string): Promise<TagPerformance[
   return [...byTag.entries()]
     .map(([tag, ps]) => ({
       tag,
+      posts: ps.length,
+      avgReactions: avg(present(ps, (m) => m.reactions)),
+      avgComments: avg(present(ps, (m) => m.comments)),
+      avgEngagementRate: avg(present(ps, engagementRate)),
+    }))
+    .sort((a, b) => (b.avgReactions ?? -1) - (a.avgReactions ?? -1))
+}
+
+export interface FormatPerformance {
+  format: string
+  posts: number
+  avgReactions: number | null
+  avgComments: number | null
+  avgEngagementRate: number | null
+}
+
+/**
+ * The user's OWN engagement per structural format — the "what do I personally
+ * win at" signal, mirroring tagPerformance but grouped by the post's `format`.
+ * Only posts that carry a format are counted.
+ */
+export async function formatPerformance(accountId: string): Promise<FormatPerformance[]> {
+  const all = await listPosts(accountId)
+  const byFormat = new Map<string, PostRow[]>()
+  for (const p of all) {
+    if (!p.format) continue
+    const arr = byFormat.get(p.format) ?? []
+    arr.push(p)
+    byFormat.set(p.format, arr)
+  }
+  const avg = (nums: number[]): number | null =>
+    nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null
+  const present = (ps: PostRow[], pick: (m: PostMetrics) => number | undefined): number[] =>
+    ps.map((p) => pick(p.metrics)).filter((n): n is number => typeof n === 'number')
+
+  return [...byFormat.entries()]
+    .map(([format, ps]) => ({
+      format,
       posts: ps.length,
       avgReactions: avg(present(ps, (m) => m.reactions)),
       avgComments: avg(present(ps, (m) => m.comments)),

@@ -3,15 +3,56 @@
 import { revalidatePath } from 'next/cache'
 import { requireAccountId } from '@/lib/auth/session'
 import { setIdeaStatus } from '@/lib/db/ideas'
-import { writeIdeaToPost } from '@/lib/integrations/write-idea'
+import {
+  previewIdeaPost,
+  saveIdeaDraft,
+  writeIdeaToPost,
+} from '@/lib/integrations/write-idea'
 import { generateIdeasForAccount } from '@/lib/integrations/run-ideas'
+import type { DraftPreview } from '@/lib/agent/draft-preview'
 import type { ActionResult } from './integrations'
+
+export interface PreviewResult extends ActionResult {
+  draft?: DraftPreview
+}
+
+/** Generate a draft for review WITHOUT saving it to Posts. */
+export async function previewIdeaAction(ideaId: string): Promise<PreviewResult> {
+  const { accountId } = await requireAccountId()
+  try {
+    const draft = await previewIdeaPost(accountId, ideaId)
+    if (!draft) {
+      return { ok: false, message: 'Could not generate a draft — try again.' }
+    }
+    return { ok: true, message: 'Preview ready.', draft }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Preview failed.' }
+  }
+}
+
+/** Persist a reviewed draft to the Posts library. */
+export async function saveIdeaDraftAction(
+  ideaId: string,
+  draft: DraftPreview,
+): Promise<ActionResult> {
+  const { accountId } = await requireAccountId()
+  try {
+    await saveIdeaDraft(accountId, ideaId, draft)
+    revalidatePath('/app/ideas')
+    revalidatePath('/app/plan')
+    revalidatePath('/app/posts')
+    return { ok: true, message: 'Saved to drafts — find it in Posts.' }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Saving failed.' }
+  }
+}
 
 export async function writeIdeaAction(ideaId: string): Promise<ActionResult> {
   const { accountId } = await requireAccountId()
   try {
     const { postId } = await writeIdeaToPost(accountId, ideaId)
     revalidatePath('/app/ideas')
+    revalidatePath('/app/plan')
     revalidatePath('/app/posts')
     return {
       ok: true,

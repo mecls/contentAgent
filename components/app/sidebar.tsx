@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
+  CalendarRange,
   FileText,
   Lightbulb,
   MessageSquarePlus,
@@ -39,6 +40,7 @@ export function Sidebar({
 
   const navItems = [
     { href: '/app/ideas', label: 'Ideas', icon: Lightbulb, badge: pendingIdeas },
+    { href: '/app/plan', label: 'Weekly plan', icon: CalendarRange },
     { href: '/app/posts', label: 'Posts', icon: FileText },
     { href: '/app/research', label: 'Research', icon: Newspaper },
     { href: '/app/integrations', label: 'Integrations', icon: Plug },

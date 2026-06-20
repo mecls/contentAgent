@@ -31,6 +31,12 @@ export const env = {
   llmApiKey: () => required('LLM_API_KEY'),
   llmBaseUrl: () => required('LLM_BASE_URL'),
   llmModel: () => required('LLM_MODEL'),
+  // Tiered models, same endpoint/key, different model id per role. HEAVY = the
+  // agentic orchestrator that drives the interactive chat loop; FAST = the
+  // cheaper writer (write_content) + background cron tasks. Both fall back to
+  // LLM_MODEL so a missing tier never breaks the app.
+  llmModelHeavy: () => process.env.LLM_MODEL_HEAVY || required('LLM_MODEL'),
+  llmModelFast: () => process.env.LLM_MODEL_FAST || required('LLM_MODEL'),
   llmMaxTokens: () => {
     const raw = process.env.LLM_MAX_TOKENS
     const n = raw ? Number(raw) : NaN

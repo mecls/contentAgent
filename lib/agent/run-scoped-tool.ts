@@ -6,6 +6,7 @@ import {
   ProposeOverwriteInput,
   CreateSkillFileInput,
   CreateSkillInput,
+  WriteContentInput,
   SavePostInput,
   ListPostsInput,
   GetPostInput,
@@ -18,11 +19,15 @@ import {
   RunResearchInput,
   GenerateIdeasInput,
   LearnWritingStyleInput,
+  AnalyzeFormatTrendsInput,
+  GetFormatPerformanceInput,
+  PlanContentWeekInput,
   ReconcileAnalyticsInput,
   SetPostUrlInput,
 } from './tools'
 import * as skills from '@/lib/skills/store'
 import * as posts from '@/lib/db/posts'
+import { DEFAULT_PLATFORM, normalizeFormatKey } from '@/lib/formats/catalog'
 import { reconcileScrapedMetrics } from '@/lib/integrations/reconcile'
 import { listResearchItems, upsertResearchItems } from '@/lib/db/research'
 import { exaSearch } from '@/lib/integrations/exa'
@@ -31,6 +36,9 @@ import { listCompetitorPosts } from '@/lib/db/competitors'
 import { runResearchIfStale } from '@/lib/integrations/run-research'
 import { generateIdeasForAccount } from '@/lib/integrations/run-ideas'
 import { learnStyleFromProfile } from '@/lib/integrations/learn-style'
+import { analyzeFormatTrends } from '@/lib/integrations/analyze-formats'
+import { suggestPostMixForAccount } from '@/lib/integrations/suggest-mix'
+import { writeContentDraft } from './write-content'
 
 /**
  * UI side-channel. Tools return a JSON result to the MODEL, but some actions also
@@ -42,6 +50,19 @@ export interface ToolContext {
   accountId: string
   conversationId?: string | null
   emit?: (event: Record<string, unknown>) => void
+  /**
+   * Streams plain assistant text (used by write_content to surface the writer
+   * model's prose live, and to fold it into the persisted transcript). Distinct
+   * from `emit`, which carries structured UI events.
+   */
+  emitText?: (text: string) => void
+  /** Aborts in-flight model calls inside a tool when the client disconnects. */
+  signal?: AbortSignal
+  /**
+   * Preview mode: save_post does NOT persist — it surfaces the full draft for
+   * review via a `postPreview` event instead. Used by the idea→draft preview flow.
+   */
+  dryRun?: boolean
 }
 
 /**
@@ -124,13 +145,44 @@ export async function runScopedTool(
       return skills.createSkill(accountId, input.slug, input.name, input.description)
     }
 
+    // ── content writing (delegated to the fast/writer model) ──
+    case 'write_content': {
+      const input = WriteContentInput.parse(rawInput)
+      const body = await writeContentDraft(input, {
+        emitText: ctx.emitText,
+        signal: ctx.signal,
+      })
+      // Return the full draft so the orchestrator can review it and pass it to
+      // save_post. The prose itself was already streamed to the user via emitText.
+      return { body }
+    }
+
     // ── posts ──
     case 'save_post': {
       const input = SavePostInput.parse(rawInput)
+      // Pin format to a canonical catalog key when it matches; else keep a
+      // lowercased fallback so the value still groups in formatPerformance.
+      const format = input.format
+        ? (normalizeFormatKey(DEFAULT_PLATFORM, input.format) ?? input.format.trim().toLowerCase())
+        : null
+      // Preview mode: surface the full draft for review instead of persisting.
+      if (ctx.dryRun) {
+        ctx.emit?.({
+          postPreview: {
+            body: input.body,
+            hook: input.hook ?? null,
+            format,
+            archetype: input.archetype ?? null,
+            skill_slug: input.skill_slug ?? null,
+          },
+        })
+        return { preview: true, saved: false }
+      }
       const id = await posts.createPost(accountId, {
         body: input.body,
         hook: input.hook ?? null,
         archetype: input.archetype ?? null,
+        format,
         status: input.status ?? 'draft',
         skill_slug: input.skill_slug ?? null,
         conversation_id: ctx.conversationId ?? null,
@@ -148,6 +200,7 @@ export async function runScopedTool(
         id: p.id,
         hook: p.hook,
         archetype: p.archetype,
+        format: p.format,
         status: p.status,
         metrics: p.metrics,
         tags: p.tags,
@@ -288,6 +341,36 @@ export async function runScopedTool(
           angle: i.angle ?? null,
           structure: i.structure ?? null,
           hook: i.hook ?? null,
+        })),
+      }
+    }
+
+    // ── format analysis & weekly planning ──
+    case 'analyze_format_trends': {
+      const input = AnalyzeFormatTrendsInput.parse(rawInput ?? {})
+      return analyzeFormatTrends(accountId, input.platform ?? DEFAULT_PLATFORM)
+    }
+    case 'get_format_performance': {
+      GetFormatPerformanceInput.parse(rawInput ?? {})
+      return posts.formatPerformance(accountId)
+    }
+    case 'plan_content_week': {
+      const input = PlanContentWeekInput.parse(rawInput ?? {})
+      const res = await suggestPostMixForAccount(accountId, {
+        platform: input.platform,
+        count: input.count,
+        horizonDays: input.horizon_days,
+      })
+      ctx.emit?.({ plan: { id: res.planId, created: res.created, summary: res.summary } })
+      return {
+        created: res.created,
+        summary: res.summary,
+        items: res.items.map((i) => ({
+          format: i.format,
+          topic: i.topic,
+          angle: i.angle,
+          hook: i.hook,
+          planned_for: i.planned_for,
         })),
       }
     }
