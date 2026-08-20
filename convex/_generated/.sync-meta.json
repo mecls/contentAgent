@@ -1,0 +1,17 @@
+{
+  "hash": "ff6ac311ccf9c8fb",
+  "syncedAt": "2026-08-20T18:51:14.096Z",
+  "source": "@miraside/convex-backend",
+  "warning": "Generated. Do not edit — run `npm run sync-types` in hub/convex-backend.",
+  "files": [
+    "_generated/api.d.ts",
+    "_generated/api.js",
+    "_generated/dataModel.d.ts",
+    "_generated/server.d.ts",
+    "_generated/server.js",
+    "audits.d.ts",
+    "ddRuns.d.ts",
+    "lib/serverAuth.d.ts",
+    "schema.d.ts"
+  ]
+}
