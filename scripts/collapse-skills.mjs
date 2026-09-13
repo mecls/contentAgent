@@ -10,7 +10,12 @@
 //     [--require <text the file must contain>] [--backup <path.json>] [--apply]
 //
 // The seed file and the backup hold personal content: keep both outside git
-// (the default backup path is under the gitignored private/ folder).
+// (the default backup path is under the gitignored private/ folder). Each run
+// writes a new timestamped backup and refuses to overwrite an existing file.
+//
+// Deleting a file row cascades to its version rows AND to any
+// content_skill_edit_proposals rows that point at it (both FKs are on delete
+// cascade), so the backup is the only copy of those rows afterwards.
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
@@ -61,7 +66,9 @@ function parseArgs(argv) {
   for (const required of ['skill-id', 'seed', 'name']) {
     if (!out[required]) die(`usage error: --${required} is required. ${USAGE}`)
   }
-  out.backup ??= `private/archive/skills-backup-${new Date().toISOString().slice(0, 10)}.json`
+  // One file per run, never overwritten: a re-run must not replace the backup taken
+  // before an earlier --apply.
+  out.backup ??= `private/archive/skills-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   return out
 }
 
@@ -129,7 +136,10 @@ async function backup(db) {
   const tables = {}
   for (const t of TABLES) tables[t] = await selectAll(db, t)
   await fs.mkdir(path.dirname(args.backup), { recursive: true })
-  await fs.writeFile(args.backup, JSON.stringify({ taken_at: new Date().toISOString(), tables }, null, 2))
+  // 'wx' fails if the file exists, so an explicit --backup path can't clobber an older backup either.
+  await fs.writeFile(args.backup, JSON.stringify({ taken_at: new Date().toISOString(), tables }, null, 2), {
+    flag: 'wx',
+  })
 
   const reread = JSON.parse(await fs.readFile(args.backup, 'utf8'))
   const counts = {}
