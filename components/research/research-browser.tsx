@@ -37,7 +37,7 @@ const SOURCES = ['web', 'hackernews', 'linkedin'] as const
 /** Build the chat prompt that drafts a post grounded in one research item. */
 export function draftPromptFor(r: ResearchItem): string {
   return [
-    'Draft a LinkedIn post based on this research item. First open the relevant skill (read_skill → read_skill_file for its constraints and archetypes), follow my voice and constraints exactly, ground the post in this item, then save_post when done.',
+    'Draft a LinkedIn post based on this research item. First open the relevant skill (read_skill), follow my voice and constraints exactly, ground the post in this item, then save_post when done.',
     '',
     `Title: ${r.title ?? r.url}`,
     `Source: ${r.source}`,

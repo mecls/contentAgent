@@ -16,7 +16,7 @@ export interface AgentLoopArgs {
   emitReasoning?: (text: string) => void
   /** Called with a tool's name when it starts executing — UI shows a status. */
   emitTool?: (name: string) => void
-  /** UI side-channel for structured events from tools (saved post, proposal). */
+  /** UI side-channel for structured events from tools (saved post, research cards). */
   emitEvent?: (event: Record<string, unknown>) => void
   /** Extra system notes injected ahead of history (e.g. the skills index). */
   systemNotes?: string[]
@@ -24,8 +24,6 @@ export interface AgentLoopArgs {
   history?: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
   /** Aborts the in-flight LLM calls when the client disconnects. */
   signal?: AbortSignal
-  /** Preview mode: save_post emits the draft for review instead of persisting it. */
-  dryRun?: boolean
   /**
    * Orchestrator model for the loop. Defaults to the HEAVY tier (glm-5.2). The
    * weekly-review cron overrides this to the fast tier to stay cheap; the actual
@@ -58,7 +56,6 @@ export async function runAgentLoop({
   systemNotes = [],
   history = [],
   signal,
-  dryRun,
   model,
 }: AgentLoopArgs): Promise<string> {
   const client = openai()
@@ -74,7 +71,6 @@ export async function runAgentLoop({
     accountId,
     conversationId,
     emit: emitEvent,
-    dryRun,
     signal,
     // write_content streams the writer model's prose straight to the UI AND folds
     // it into finalText, so the post appears live and survives a chat reload.

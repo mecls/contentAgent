@@ -22,8 +22,8 @@ export const maxDuration = 300
  * is scoped to the caller's own data. Persists the conversation + messages so the
  * chat has ChatGPT-style history.
  *
- * Event shapes: {conv}, {t}, {r}, {tool}, {post}, {proposal}, {skillUpdate},
- * {researchItems}, {ideaItems}, {research}, {ideas}, {done}, {error}.
+ * Event shapes: {conv}, {t}, {r}, {tool}, {post}, {researchItems}, {research},
+ * {done}, {error}.
  */
 export async function POST(req: NextRequest) {
   let accountId: string
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     skillsNote = ''
   }
 
-  // The onboarding profile (who Miguel is, audience, voice, constraints) as
+  // The onboarding profile (who the creator is, audience, voice, constraints) as
   // background context — captured at onboarding but otherwise never seen by the
   // model unless it happens to live in a skill file.
   let profileNote = ''

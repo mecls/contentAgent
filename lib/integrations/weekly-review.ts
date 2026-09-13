@@ -1,15 +1,14 @@
 import { runAgentLoop } from '@/lib/agent/agent-loop'
 import { llmModelFast } from '@/lib/agent/llm'
-import { buildSkillsIndexNote } from '@/lib/skills/store'
 import { createConversation, addMessage } from '@/lib/db/conversations'
 import type { SyncResult } from '@/lib/integrations/sync-posts'
 
 /**
  * The qualitative layer of the weekly run. Metrics were ALREADY written
- * deterministically by reconcileScrapedMetrics — here the agent only reasons
- * about the fresh numbers: it appends one-line lessons to the skill's
- * improvement log and writes a short summary into a dated conversation so the
- * weekly result shows up in the sidebar.
+ * deterministically by reconcileScrapedMetrics — here the agent only reads the
+ * fresh numbers and writes a short summary into a dated conversation so the
+ * weekly result shows up in the sidebar. It cannot change the skill: the agent
+ * has no skill-write tool.
  *
  * Runs headless: runAgentLoop is called with no emit* callbacks (no SSE); we
  * persist the returned text ourselves.
@@ -39,10 +38,7 @@ export async function runWeeklyReview(
       ? `Posts with fresh numbers this week:\n${lines.join('\n')}`
       : 'No posts had fresh engagement this week.',
     '',
-    'Do this:',
-    '1. Read the miguel-linkedin-content skill if you need its archetypes/constraints.',
-    "2. For each post above, append ONE concise line to references/improvement-log.md via append_skill_file: the date, the post's apparent archetype, the reactions/comments numbers, and a one-line lesson. Do NOT invent impressions.",
-    '3. Then give me a short written summary of how this week performed and any pattern worth noting.',
+    'Give me a short written summary of how this week performed and any pattern worth noting. Do NOT invent impressions.',
   ].join('\n')
 
   await addMessage(accountId, conversationId, {
@@ -50,19 +46,11 @@ export async function runWeeklyReview(
     content: `Automated weekly analytics review for ${date} (${touched.length} post(s) with fresh numbers).`,
   })
 
-  let skillsNote = ''
-  try {
-    skillsNote = await buildSkillsIndexNote(accountId)
-  } catch {
-    skillsNote = ''
-  }
-
   const answer = await runAgentLoop({
     prompt,
     accountId,
     conversationId,
-    systemNotes: skillsNote ? [skillsNote] : [],
-    // Automated cron — keep it on the cheap model; it only logs lessons + a summary.
+    // Automated cron — keep it on the cheap model; it only writes a summary.
     model: llmModelFast(),
   })
 

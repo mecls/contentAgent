@@ -8,13 +8,6 @@ export interface PostCard {
   hook: string
 }
 
-export interface ProposalCard {
-  id: string
-  slug: string
-  path: string
-  rationale: string
-}
-
 export interface ResearchCard {
   id: string
   source: string
@@ -23,14 +16,6 @@ export interface ResearchCard {
   summary: string | null
   topic: string | null
   key_points?: string[]
-}
-
-export interface IdeaCard {
-  id: string
-  topic: string
-  angle: string | null
-  hook: string | null
-  structure: string | null
 }
 
 export interface ChatMessage {
@@ -44,12 +29,8 @@ export interface ChatMessage {
   activity?: string
   /** Posts the agent saved during this turn (rendered as inline cards). */
   posts?: PostCard[]
-  /** Skill-overwrite proposals raised this turn (rendered as approval cards). */
-  proposals?: ProposalCard[]
   /** Research items surfaced this turn (rendered as inline cards). */
   research?: ResearchCard[]
-  /** Post ideas surfaced this turn (rendered as inline cards). */
-  ideas?: IdeaCard[]
 }
 
 export interface InitialMessage {
@@ -64,14 +45,7 @@ function activityFor(tool: string): string {
   switch (tool) {
     case 'list_skills':
     case 'read_skill':
-    case 'read_skill_file':
       return 'Reading the skill…'
-    case 'append_skill_file':
-    case 'create_skill_file':
-    case 'create_skill':
-      return 'Updating the skill…'
-    case 'propose_skill_overwrite':
-      return 'Proposing a skill change…'
     case 'save_post':
       return 'Saving the post…'
     case 'list_posts':
@@ -87,10 +61,6 @@ function activityFor(tool: string): string {
       return 'Searching the news…'
     case 'list_competitor_insights':
       return 'Studying competitors…'
-    case 'list_ideas':
-      return 'Gathering ideas…'
-    case 'learn_writing_style':
-      return 'Learning the writing style…'
     default:
       return 'Working on it…'
   }
@@ -174,10 +144,7 @@ export function useAgentChat({
               r?: string
               tool?: string
               post?: PostCard
-              proposal?: ProposalCard
               researchItems?: ResearchCard[]
-              ideaItems?: IdeaCard[]
-              skillUpdate?: { slug: string; path: string; kind: string }
               done?: boolean
               error?: string
             }
@@ -205,21 +172,10 @@ export function useAgentChat({
               patch((x) => ({ ...x, activity: activityFor(payload.tool!) }))
             } else if (payload.post) {
               patch((x) => ({ ...x, posts: [...(x.posts ?? []), payload.post!] }))
-            } else if (payload.proposal) {
-              patch((x) => ({
-                ...x,
-                proposals: [...(x.proposals ?? []), payload.proposal!],
-              }))
             } else if (payload.researchItems) {
               patch((x) => ({
                 ...x,
                 research: [...(x.research ?? []), ...payload.researchItems!],
-                activity: undefined,
-              }))
-            } else if (payload.ideaItems) {
-              patch((x) => ({
-                ...x,
-                ideas: [...(x.ideas ?? []), ...payload.ideaItems!],
                 activity: undefined,
               }))
             } else if (payload.error) {
@@ -236,7 +192,7 @@ export function useAgentChat({
       } catch {
         if (controller.signal.aborted) {
           setMessages((m) =>
-            m.filter((x) => !(x.id === agentId && !x.body && !x.posts && !x.proposals)),
+            m.filter((x) => !(x.id === agentId && !x.body && !x.posts)),
           )
         } else {
           patch((x) =>

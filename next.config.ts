@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '4mb',
     },
   },
+  // Ideas and Weekly plan were removed. Not permanent on purpose: a browser-cached
+  // 308 would keep redirecting even after a revert.
+  async redirects() {
+    return [
+      { source: '/app/ideas', destination: '/app', permanent: false },
+      { source: '/app/plan', destination: '/app', permanent: false },
+    ]
+  },
 }
 
 export default nextConfig

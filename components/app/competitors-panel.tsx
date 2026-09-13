@@ -49,7 +49,7 @@ export function CompetitorsPanel({
           <p className="text-sm font-medium text-neutral-900">Competitor profiles</p>
           <p className="text-xs text-neutral-400">
             ~10 LinkedIn creators to study. Weekly, we scrape their latest posts and extract what makes
-            them work — to inform your ideas (never to copy their voice).
+            them work — to inform your posts (never to copy their voice).
           </p>
         </div>
       </div>

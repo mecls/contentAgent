@@ -4,9 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
-  CalendarRange,
   FileText,
-  Lightbulb,
   MessageSquarePlus,
   Newspaper,
   Plug,
@@ -24,14 +22,10 @@ interface ConversationLite {
 export function Sidebar({
   email,
   conversations,
-  pendingProposals,
-  pendingIdeas,
   signOutAction,
 }: {
   email: string
   conversations: ConversationLite[]
-  pendingProposals: number
-  pendingIdeas: number
   signOutAction: () => Promise<void>
 }) {
   const pathname = usePathname()
@@ -39,17 +33,10 @@ export function Sidebar({
   const activeConv = params.get('c')
 
   const navItems = [
-    { href: '/app/ideas', label: 'Ideas', icon: Lightbulb, badge: pendingIdeas },
-    { href: '/app/plan', label: 'Weekly plan', icon: CalendarRange },
     { href: '/app/posts', label: 'Posts', icon: FileText },
     { href: '/app/research', label: 'Research', icon: Newspaper },
     { href: '/app/integrations', label: 'Integrations', icon: Plug },
-    {
-      href: '/app/skills',
-      label: 'Skills',
-      icon: Wrench,
-      badge: pendingProposals,
-    },
+    { href: '/app/skills', label: 'Skills', icon: Wrench },
   ]
 
   return (
@@ -124,7 +111,7 @@ export function Sidebar({
 
       {/* Section nav */}
       <nav className="border-t border-neutral-200/70 px-2 py-2">
-        {navItems.map(({ href, label, icon: Icon, badge }) => {
+        {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href)
           return (
             <Link
@@ -139,11 +126,6 @@ export function Sidebar({
             >
               <Icon className="h-4 w-4" aria-hidden />
               <span className="flex-1">{label}</span>
-              {badge ? (
-                <span className="rounded-full bg-[var(--brand-accent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--brand-accent-foreground)]">
-                  {badge}
-                </span>
-              ) : null}
             </Link>
           )
         })}

@@ -6,7 +6,6 @@ import {
   ArrowRight,
   ArrowUp,
   FileText,
-  Lightbulb,
   Newspaper,
   PenLine,
   Sparkles,
@@ -16,13 +15,11 @@ import {
 import {
   useAgentChat,
   type ChatMessage,
-  type IdeaCard,
   type InitialMessage,
   type ResearchCard,
 } from './use-agent-chat'
 import { MarkdownLite } from './markdown-lite'
 import { ThinkingTrace } from './thinking-trace'
-import { ProposalCard } from '@/components/skills/proposal-card'
 
 const SUGGESTIONS = [
   'Draft a LinkedIn post about AI replacing junior engineers',
@@ -38,12 +35,6 @@ const QUICK_ACTIONS = [
     icon: Newspaper,
     prompt:
       "Show me this week's research — list the most relevant items I could post about.",
-    send: true,
-  },
-  {
-    label: 'Post ideas',
-    icon: Lightbulb,
-    prompt: 'Show me my current post ideas.',
     send: true,
   },
   {
@@ -63,26 +54,13 @@ const timeFmt = new Intl.DateTimeFormat(undefined, {
 
 function researchDraftPrompt(r: ResearchCard): string {
   return [
-    'Draft a LinkedIn post based on this research item. First open the relevant skill (read_skill → read_skill_file for its constraints and archetypes), follow my voice and constraints, ground the post in this item, then save_post.',
+    'Draft a LinkedIn post based on this research item. First open the relevant skill (read_skill), follow my voice and constraints, ground the post in this item, then save_post.',
     '',
     `Title: ${r.title ?? r.url}`,
     `Source: ${r.source}`,
     `URL: ${r.url}`,
     r.summary ? `Summary: ${r.summary}` : '',
     r.key_points?.length ? `Key points:\n- ${r.key_points.join('\n- ')}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n')
-}
-
-function ideaDraftPrompt(i: IdeaCard): string {
-  return [
-    'Draft a LinkedIn post from this idea. First open the relevant skill (read_skill → read_skill_file), follow my voice and constraints, then save_post.',
-    '',
-    `Topic: ${i.topic}`,
-    i.angle ? `Angle: ${i.angle}` : '',
-    i.hook ? `Hook idea: ${i.hook}` : '',
-    i.structure ? `Suggested structure: ${i.structure}` : '',
   ]
     .filter(Boolean)
     .join('\n')
@@ -290,27 +268,6 @@ function Bubble({
           </div>
         ))}
 
-        {/* Idea cards */}
-        {message.ideas?.map((i) => (
-          <div
-            key={i.id}
-            className="w-full rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-sm"
-          >
-            <div className="flex items-center gap-1.5 text-amber-900">
-              <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span className="font-medium">{i.topic}</span>
-            </div>
-            {i.hook ? <p className="mt-1 text-xs text-amber-800/80">“{i.hook}”</p> : null}
-            {i.angle ? <p className="mt-1 text-xs text-amber-800/70">{i.angle}</p> : null}
-            <button
-              onClick={() => onPrefill(ideaDraftPrompt(i))}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-accent)] px-2.5 py-1 text-xs font-medium text-[var(--brand-accent-foreground)] hover:opacity-90"
-            >
-              Draft this <ArrowRight className="h-3 w-3" aria-hidden />
-            </button>
-          </div>
-        ))}
-
         {/* Saved-post cards */}
         {message.posts?.map((p) => (
           <Link
@@ -324,18 +281,6 @@ function Bubble({
             </span>
             <span className="text-xs font-medium">View</span>
           </Link>
-        ))}
-
-        {/* Skill-overwrite approval cards */}
-        {message.proposals?.map((pr) => (
-          <ProposalCard
-            key={pr.id}
-            id={pr.id}
-            slug={pr.slug}
-            path={pr.path}
-            rationale={pr.rationale}
-            className="w-full"
-          />
         ))}
 
         <span className="pl-1 text-[11px] text-neutral-400">{time}</span>
@@ -355,9 +300,8 @@ function IntroHero({ onPrefill }: { onPrefill: (q: string) => void }) {
           Your content strategist
         </h2>
         <p className="max-w-md text-sm text-neutral-500">
-          I draft, critique, and plan LinkedIn content using your skill — and I
-          get sharper every time you share results. Ask me anything, or start
-          with one of these.
+          I draft, critique, and plan LinkedIn content using your skill. Ask me
+          anything, or start with one of these.
         </p>
       </div>
       <div className="grid w-full max-w-lg gap-2 sm:grid-cols-2">

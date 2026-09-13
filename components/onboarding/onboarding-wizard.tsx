@@ -214,7 +214,7 @@ export function OnboardingWizard({ email }: { email: string }) {
         <div className="rounded-2xl border border-neutral-200 bg-white p-5">
           {step === 0 ? (
             <Section title="About you" hint="Who's posting, and what you can honestly claim.">
-              <TextInput label="Your name" value={p.name} onChange={(v) => set('name', v)} placeholder="Miguel Carvalhal" />
+              <TextInput label="Your name" value={p.name} onChange={(v) => set('name', v)} placeholder="Alex Rivera" />
               <div className="grid grid-cols-2 gap-3">
                 <TextInput label="Role / title" value={p.role} onChange={(v) => set('role', v)} placeholder="Founder" />
                 <TextInput label="Company" value={p.company} onChange={(v) => set('company', v)} placeholder="Miraside" />

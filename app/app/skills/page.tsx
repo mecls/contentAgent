@@ -1,20 +1,12 @@
 import Link from 'next/link'
 import { Download, Plus, Wrench } from 'lucide-react'
 import { requireAccountId } from '@/lib/auth/session'
-import {
-  listSkills,
-  listSkillFiles,
-  listFileVersions,
-  listProposals,
-} from '@/lib/skills/store'
+import { listSkills, listSkillFiles, listFileVersions } from '@/lib/skills/store'
 import { SkillFileRow } from '@/components/skills/skill-file-row'
-import { ProposalCard } from '@/components/skills/proposal-card'
 
 export default async function SkillsPage() {
   const { accountId } = await requireAccountId()
   const skills = await listSkills(accountId)
-  const proposals = await listProposals(accountId, 'pending')
-  const slugById = new Map(skills.map((s) => [s.id, s.slug]))
 
   const skillBlocks = await Promise.all(
     skills.map(async (skill) => {
@@ -36,8 +28,8 @@ export default async function SkillsPage() {
           <div>
             <h1 className="text-xl font-semibold text-neutral-900">Skills</h1>
             <p className="mt-1 text-sm text-neutral-500">
-              The skills the agent writes from — and how they evolve. Appends apply
-              automatically; overwrites wait here for your approval.
+              The skill the agent writes from. Only you can change it — every save is
+              versioned and can be rolled back.
             </p>
           </div>
           <Link
@@ -48,27 +40,6 @@ export default async function SkillsPage() {
             Add a skill
           </Link>
         </header>
-
-        {/* Pending proposals */}
-        {proposals.length > 0 ? (
-          <section className="mb-8">
-            <h2 className="mb-2 text-sm font-medium text-neutral-900">
-              Pending approvals ({proposals.length})
-            </h2>
-            <div className="flex flex-col gap-3">
-              {proposals.map((p) => (
-                <ProposalCard
-                  key={p.id}
-                  id={p.id}
-                  slug={slugById.get(p.skill_id) ?? '?'}
-                  path={p.path}
-                  rationale={p.rationale ?? ''}
-                  proposedContent={p.proposed_content}
-                />
-              ))}
-            </div>
-          </section>
-        ) : null}
 
         {/* Skills + files */}
         {skillBlocks.length === 0 ? (

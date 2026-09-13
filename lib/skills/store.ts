@@ -5,14 +5,16 @@ import { supabaseService } from '@/lib/supabase/service'
  * Account-scoped CRUD + versioning for skills stored in Supabase.
  *
  * Every function takes a SERVER-DERIVED accountId and filters by it (the
- * service-role client bypasses RLS, so scoping is our responsibility). This is
- * the only module that mutates skill content; the agent reaches it through tools.
+ * service-role client bypasses RLS, so scoping is our responsibility).
  *
- * Self-edit rule (per product decision): appends are applied immediately;
- * overwrites of existing, non-empty content become a pending proposal that a
- * human approves in the UI. Every applied change is recorded as an immutable
- * version row for audit + rollback.
+ * A skill is exactly one file, SKILL.md, and only human actions write it: the
+ * owner editing on the Skills page, and onboarding. The agent can read
+ * a skill but has no tool that reaches the write functions here. Every applied
+ * change is recorded as an immutable version row for audit + rollback.
  */
+
+/** The only file a skill may contain. */
+export const SKILL_FILE = 'SKILL.md'
 
 export interface SkillRow {
   id: string
@@ -28,20 +30,6 @@ export interface SkillFileRow {
   content: string
   version: number
   updated_at: string
-}
-
-export interface ProposalRow {
-  id: string
-  skill_id: string
-  skill_file_id: string | null
-  path: string
-  proposed_content: string
-  base_version: number | null
-  change_type: string
-  rationale: string | null
-  status: string
-  created_at: string
-  resolved_at: string | null
 }
 
 export interface VersionRow {
@@ -97,17 +85,15 @@ export async function listSkillFiles(
   return (data ?? []) as SkillFileRow[]
 }
 
-/** SKILL.md content + the list of reference paths (for progressive disclosure). */
+/** A skill's SKILL.md — the whole skill, since it has no other files. */
 export async function readSkill(accountId: string, slug: string) {
   const skill = await getSkillBySlug(accountId, slug)
-  const files = await listSkillFiles(accountId, slug)
-  const skillMd = files.find((f) => f.path === 'SKILL.md')
+  const skillMd = await getFile(accountId, slug, SKILL_FILE)
   return {
     slug: skill.slug,
     name: skill.name,
     description: skill.description,
     skill_md: skillMd?.content ?? '',
-    files: files.map((f) => f.path),
   }
 }
 
@@ -128,22 +114,12 @@ async function getFile(
   return (data as SkillFileRow | null) ?? null
 }
 
-export async function readSkillFile(
-  accountId: string,
-  slug: string,
-  filePath: string,
-): Promise<string> {
-  const file = await getFile(accountId, slug, filePath)
-  if (!file) throw new Error(`file not found: ${slug}/${filePath}`)
-  return file.content
-}
-
 // ── version recording ─────────────────────────────────────────────────────────
 
 async function recordVersion(
   accountId: string,
   file: { id: string; path: string; content: string; version: number },
-  changeType: 'append' | 'overwrite' | 'create' | 'rollback',
+  changeType: 'overwrite' | 'create' | 'rollback',
   author: 'agent' | 'user',
 ): Promise<void> {
   const { error } = await supabaseService()
@@ -160,62 +136,11 @@ async function recordVersion(
   if (error) throw new Error(`recordVersion failed: ${error.message}`)
 }
 
-// ── writes ────────────────────────────────────────────────────────────────────
+// ── writes (human paths only: Skills page, onboarding) ────────────────────────
 
 /**
- * Append to a reference file (the skill's own "add, don't overwrite" rule —
- * applied immediately). Creates the file if it doesn't exist yet.
- */
-export async function appendSkillFile(
-  accountId: string,
-  slug: string,
-  filePath: string,
-  content: string,
-  author: 'agent' | 'user' = 'agent',
-): Promise<{ applied: true; path: string; version: number }> {
-  const skill = await getSkillBySlug(accountId, slug)
-  const existing = await getFile(accountId, slug, filePath)
-  const svc = supabaseService()
-
-  if (!existing) {
-    const { data, error } = await svc
-      .from('content_skill_files')
-      .insert({
-        skill_id: skill.id,
-        account_id: accountId,
-        path: filePath,
-        content,
-        version: 1,
-      })
-      .select('id, path, content, version')
-      .single()
-    if (error || !data) {
-      throw new Error(`appendSkillFile create failed: ${error?.message ?? 'no data'}`)
-    }
-    await recordVersion(accountId, data as SkillFileRow, 'create', author)
-    return { applied: true, path: filePath, version: 1 }
-  }
-
-  const merged = `${existing.content.replace(/\s*$/, '')}\n\n${content.trim()}\n`
-  const nextVersion = existing.version + 1
-  const { error } = await svc
-    .from('content_skill_files')
-    .update({ content: merged, version: nextVersion, updated_at: new Date().toISOString() })
-    .eq('id', existing.id)
-    .eq('account_id', accountId)
-  if (error) throw new Error(`appendSkillFile update failed: ${error.message}`)
-  await recordVersion(
-    accountId,
-    { id: existing.id, path: filePath, content: merged, version: nextVersion },
-    'append',
-    author,
-  )
-  return { applied: true, path: filePath, version: nextVersion }
-}
-
-/**
- * Create a brand-new reference file (new content, not destructive). Applied
- * immediately. Errors if the path already exists (use propose/append instead).
+ * Create a skill's SKILL.md. Errors if it already exists (use writeSkillFile to
+ * change it).
  */
 export async function createSkillFile(
   accountId: string,
@@ -224,6 +149,7 @@ export async function createSkillFile(
   content: string,
   author: 'agent' | 'user' = 'agent',
 ): Promise<{ applied: true; path: string }> {
+  if (filePath !== SKILL_FILE) throw new Error(`only ${SKILL_FILE} is allowed in a skill: ${filePath}`)
   const existing = await getFile(accountId, slug, filePath)
   if (existing) throw new Error(`file already exists: ${slug}/${filePath}`)
   const skill = await getSkillBySlug(accountId, slug)
@@ -246,10 +172,9 @@ export async function createSkillFile(
 }
 
 /**
- * Directly overwrite a file's full content — for DELIBERATE human edits from the
- * UI (the owner editing their own skill). Unlike the agent's `proposeOverwrite`,
- * this applies immediately; it still records a version for history/rollback.
- * Creates the file if it doesn't exist yet.
+ * Directly overwrite SKILL.md — for DELIBERATE human edits from the UI (the owner
+ * editing their own skill). Applies immediately and records a version for
+ * history/rollback. Creates the file if it doesn't exist yet.
  */
 export async function writeSkillFile(
   accountId: string,
@@ -258,6 +183,7 @@ export async function writeSkillFile(
   content: string,
   author: 'agent' | 'user' = 'user',
 ): Promise<{ applied: true; path: string; version: number }> {
+  if (filePath !== SKILL_FILE) throw new Error(`only ${SKILL_FILE} is allowed in a skill: ${filePath}`)
   const existing = await getFile(accountId, slug, filePath)
   if (!existing) {
     const res = await createSkillFile(accountId, slug, filePath, content, author)
@@ -291,181 +217,6 @@ export async function createSkill(
     .insert({ account_id: accountId, slug, name, description })
   if (error) throw new Error(`createSkill failed: ${error.message}`)
   return { applied: true, slug }
-}
-
-/**
- * Overwrite request. If the target file exists with non-empty content, this does
- * NOT write — it records a pending proposal for human approval and returns its
- * id. If the file is new/empty, it writes directly (nothing destroyed).
- */
-export async function proposeOverwrite(
-  accountId: string,
-  slug: string,
-  filePath: string,
-  content: string,
-  rationale: string,
-): Promise<
-  | { applied: true; path: string }
-  | { proposed: true; proposalId: string; path: string }
-> {
-  const skill = await getSkillBySlug(accountId, slug)
-  const existing = await getFile(accountId, slug, filePath)
-
-  if (!existing || existing.content.trim() === '') {
-    // Nothing to destroy → safe to apply immediately as a create/overwrite.
-    if (!existing) {
-      await createSkillFile(accountId, slug, filePath, content)
-    } else {
-      const nextVersion = existing.version + 1
-      const { error } = await supabaseService()
-        .from('content_skill_files')
-        .update({ content, version: nextVersion, updated_at: new Date().toISOString() })
-        .eq('id', existing.id)
-        .eq('account_id', accountId)
-      if (error) throw new Error(`proposeOverwrite apply failed: ${error.message}`)
-      await recordVersion(
-        accountId,
-        { id: existing.id, path: filePath, content, version: nextVersion },
-        'overwrite',
-        'agent',
-      )
-    }
-    return { applied: true, path: filePath }
-  }
-
-  const { data, error } = await supabaseService()
-    .from('content_skill_edit_proposals')
-    .insert({
-      account_id: accountId,
-      skill_id: skill.id,
-      skill_file_id: existing.id,
-      path: filePath,
-      proposed_content: content,
-      base_version: existing.version,
-      change_type: 'overwrite',
-      rationale,
-      status: 'pending',
-    })
-    .select('id')
-    .single()
-  if (error || !data) {
-    throw new Error(`proposeOverwrite failed: ${error?.message ?? 'no data'}`)
-  }
-  return { proposed: true, proposalId: data.id as string, path: filePath }
-}
-
-// ── proposals ─────────────────────────────────────────────────────────────────
-
-export async function listProposals(
-  accountId: string,
-  status = 'pending',
-): Promise<ProposalRow[]> {
-  const { data, error } = await supabaseService()
-    .from('content_skill_edit_proposals')
-    .select(
-      'id, skill_id, skill_file_id, path, proposed_content, base_version, change_type, rationale, status, created_at, resolved_at',
-    )
-    .eq('account_id', accountId)
-    .eq('status', status)
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(`listProposals failed: ${error.message}`)
-  return (data ?? []) as ProposalRow[]
-}
-
-export async function getProposal(
-  accountId: string,
-  proposalId: string,
-): Promise<ProposalRow | null> {
-  const { data, error } = await supabaseService()
-    .from('content_skill_edit_proposals')
-    .select(
-      'id, skill_id, skill_file_id, path, proposed_content, base_version, change_type, rationale, status, created_at, resolved_at',
-    )
-    .eq('account_id', accountId)
-    .eq('id', proposalId)
-    .maybeSingle()
-  if (error) throw new Error(`getProposal failed: ${error.message}`)
-  return (data as ProposalRow | null) ?? null
-}
-
-/** Apply a pending proposal: overwrite the file, version it, mark approved. */
-export async function approveProposal(
-  accountId: string,
-  proposalId: string,
-): Promise<void> {
-  const proposal = await getProposal(accountId, proposalId)
-  if (!proposal) throw new Error('proposal not found')
-  if (proposal.status !== 'pending') throw new Error('proposal already resolved')
-
-  const svc = supabaseService()
-
-  if (proposal.skill_file_id) {
-    const { data: file, error: fErr } = await svc
-      .from('content_skill_files')
-      .select('id, path, version')
-      .eq('account_id', accountId)
-      .eq('id', proposal.skill_file_id)
-      .single()
-    if (fErr || !file) throw new Error(`approveProposal file lookup failed: ${fErr?.message}`)
-    const nextVersion = (file.version as number) + 1
-    const { error: uErr } = await svc
-      .from('content_skill_files')
-      .update({
-        content: proposal.proposed_content,
-        version: nextVersion,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', proposal.skill_file_id)
-      .eq('account_id', accountId)
-    if (uErr) throw new Error(`approveProposal update failed: ${uErr.message}`)
-    await recordVersion(
-      accountId,
-      {
-        id: proposal.skill_file_id,
-        path: proposal.path,
-        content: proposal.proposed_content,
-        version: nextVersion,
-      },
-      'overwrite',
-      'agent',
-    )
-  } else {
-    // Proposal targeted a not-yet-existing file → create it.
-    const { data: skill } = await svc
-      .from('content_skills')
-      .select('slug')
-      .eq('account_id', accountId)
-      .eq('id', proposal.skill_id)
-      .single()
-    if (skill) {
-      await createSkillFile(
-        accountId,
-        skill.slug as string,
-        proposal.path,
-        proposal.proposed_content,
-      )
-    }
-  }
-
-  const { error: pErr } = await svc
-    .from('content_skill_edit_proposals')
-    .update({ status: 'approved', resolved_at: new Date().toISOString() })
-    .eq('id', proposalId)
-    .eq('account_id', accountId)
-  if (pErr) throw new Error(`approveProposal resolve failed: ${pErr.message}`)
-}
-
-export async function rejectProposal(
-  accountId: string,
-  proposalId: string,
-): Promise<void> {
-  const { error } = await supabaseService()
-    .from('content_skill_edit_proposals')
-    .update({ status: 'rejected', resolved_at: new Date().toISOString() })
-    .eq('id', proposalId)
-    .eq('account_id', accountId)
-    .eq('status', 'pending')
-  if (error) throw new Error(`rejectProposal failed: ${error.message}`)
 }
 
 // ── version history + rollback ─────────────────────────────────────────────────
@@ -548,15 +299,15 @@ export async function exportSkillToZip(
 
 /**
  * Compact index of available skills injected as a system note each turn, so the
- * model knows what exists and can pull the full SKILL.md + references on demand.
+ * model knows what exists and can load a skill's SKILL.md on demand.
  */
 export async function buildSkillsIndexNote(accountId: string): Promise<string> {
   const skills = await listSkills(accountId)
   if (skills.length === 0) {
-    return 'AVAILABLE SKILLS: (none yet). You can create one with create_skill.'
+    return 'AVAILABLE SKILLS: (none yet).'
   }
   const lines = skills.map(
     (s) => `- ${s.slug}: ${s.description ?? s.name}`,
   )
-  return `AVAILABLE SKILLS (call read_skill with the slug to open one, then read_skill_file for its references before writing):\n${lines.join('\n')}`
+  return `AVAILABLE SKILLS (call read_skill with the slug to load its SKILL.md before writing):\n${lines.join('\n')}`
 }

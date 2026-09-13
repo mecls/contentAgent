@@ -37,7 +37,7 @@ export function slugifyUsername(name: string): string {
   return first || 'user'
 }
 
-/** The skill slug for a person + platform, e.g. `miguel-linkedin-content`. */
+/** The skill slug for a person + platform, e.g. `alex-linkedin-content`. */
 export function skillSlug(username: string, platformId: string): string {
   return `${username}-${platformSlug(platformId)}`
 }
