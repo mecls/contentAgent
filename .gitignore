@@ -29,3 +29,7 @@ yarn-error.log*
 
 # typescript
 next-env.d.ts
+
+# Personal, local-only material: skill sources, planning docs, database backups.
+# Never commit — the repo is public.
+/private/
