@@ -5,6 +5,24 @@ this session, and how each one works under the hood.
 
 ---
 
+## Update 2026-09-13 — skill recovery
+
+Post quality had dropped because the agent kept rewriting its own skill, so these
+were removed:
+
+- **Every skill-writing tool:** `append_skill_file`, `propose_skill_overwrite`,
+  `create_skill_file`, `create_skill` and `learn_writing_style` (section 2 below).
+  The agent can only read the skill now.
+- **Multi-file skills and the bundled seed skill.** A skill is one `SKILL.md`, stored
+  in the database under its account. No skill content ships in the repo any more; a
+  one-off data step removes the old reference files from the database.
+- **Ideas and Weekly Plan:** the pages, their agent tools and the cron steps that
+  generated them. `/app/ideas` and `/app/plan` redirect to the chat.
+
+You change the skill yourself on the Skills page — see `docs/self-improving-skills.md`.
+
+---
+
 ## The one-sentence version
 
 The agent now: writes **clean, paste-ready posts** (no stray Markdown), can **copy
@@ -37,6 +55,8 @@ putting it inside the post.
 ---
 
 ## 2. Writing style by reference ("write like this person")
+
+> **Removed on 2026-09-13 — see top.**
 
 ### What it does
 You can point the agent at another creator and have your posts written in **their

@@ -1,8 +1,8 @@
 # contentAgent — setup
 
 Miraside's content agent: a ChatGPT-style studio that drafts, critiques, and
-plans LinkedIn content using a versioned **skill**, and **self-improves** by
-updating that skill over time. Built on Next.js 16 + Supabase, with an
+plans LinkedIn content using a versioned, **read-only skill** (one `SKILL.md`
+that you edit on the Skills page). Built on Next.js 16 + Supabase, with an
 open-source model served via **Ollama Cloud** (OpenAI-compatible).
 
 ## 1. Install
@@ -46,25 +46,24 @@ npm run dev
 # http://localhost:3000
 ```
 
-Sign up with email/password. On first sign-in your account is provisioned and the
-`miguel-linkedin-content` skill is seeded into the DB from `seed/skills/`.
+Sign up with email/password. On first sign-in your account is provisioned, and
+onboarding generates your skill — one `SKILL.md`, stored in the database under
+your account.
 
 ## How it works
 
-- **Chat** (`/app`): streaming agent. Before writing, it reads the skill
-  (`read_skill` → `read_skill_file`) and follows its constraints. Finished posts
-  are saved via `save_post` and appear under **Posts**.
-- **Self-improvement:** the agent **appends** lessons/patterns to the skill
-  automatically (e.g. `references/improvement-log.md`). To **overwrite** existing
-  guidance it raises a proposal you approve in chat or on the **Skills** page.
-  Every change is versioned and restorable.
+- **Chat** (`/app`): streaming agent. Before writing, it reads the skill's
+  `SKILL.md` (`read_skill`) and follows its constraints. Finished posts are saved
+  via `save_post` and appear under **Posts**.
+- **The skill is read-only to the agent:** no tool can change it. You edit
+  `SKILL.md` on the **Skills** page; every save is versioned and restorable.
+  Corrections you give in chat aren't remembered unless you add them there.
 - **Posts** (`/app/posts`): the library. Edit, log real metrics, mark as posted.
 - **Integrations** (`/app/integrations`): Apify scrapers — Phase 2 (stubbed).
-- **Skills** (`/app/skills`): inspect skill files, version history, pending
-  approvals; restore any prior version; export back to a `.skill` bundle.
+- **Skills** (`/app/skills`): view and edit each skill's `SKILL.md`, see its
+  version history, restore any prior version, export a `.skill` bundle.
 
 ## Phase 2 (planned)
 
 Connect Apify to scrape top LinkedIn posts → store in `content_scraped_posts` →
-an `analyze_against_ours` tool compares them to our posts and proposes skill
-improvements.
+an `analyze_against_ours` tool compares them to our posts.
