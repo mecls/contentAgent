@@ -140,20 +140,21 @@ export interface UnsupportedDetail {
 }
 export type DetailReview = { ok: true; unsupported: UnsupportedDetail[] } | { ok: false }
 
-export const REVIEW_SYSTEM = `You check a social media post for invented details before it is saved. The creator publishes only real stories and facts.
+export const REVIEW_SYSTEM = `You check a social media post for invented moments before it is saved. The creator publishes only real stories and facts.
 
-Find every concrete detail in the POST: a specific scene, situation, incident, event, story, conversation, quote, person, customer, company, product, place, time, season, count or number — including situations written to the reader as "you" (for example "the call you took last winter", "the review scheduled between two meetings and a fire drill", "You have three").
+List only SPECIFIC MOMENTS AND PARTICULARS in the POST: a particular incident or event, a conversation or quote, an individual person or customer, or a situation pinned down by particulars — a specific time, day, season, place, count, amount or outcome. Situations written to the reader as "you" count. Examples: "the call you took last winter", "the review scheduled between two meetings and a fire drill", "the report that changed twice", "You have three", "a client cut costs by 40%".
 
-A detail is SUPPORTED when the EVIDENCE states it or plainly describes the same thing: a figure a source reports, a line or object the skill records, or something the creator said. The wording may differ.
+Never list (these need no source):
+- kinds of work, tasks, roles or functions, alone or in a list ("invoice matching and ticket triage", "reporting that drags into the night", "follow-ups competing for the same staff");
+- any term or phrase that appears in the EVIDENCE, including the skill's vocabulary;
+- general statements, opinions, arguments, metaphors and predictions;
+- the creator's own framing, positioning and questions ("this is the problem I work on", "which one sounds like you?").
 
-Do not list:
-- general statements and opinions with no specific scene ("reporting drags into the night", "coordination eats the day");
-- the creator's own framing, positioning and questions ("this is the problem I work on", "which one sounds like you?");
-- ordinary terms of the trade (invoices, tickets, pipeline).
+A listed moment is SUPPORTED when the EVIDENCE states it or plainly describes the same thing; the wording may differ. Return only the unsupported ones. Quote each exactly as it appears in the post (at most 12 words) and give a short reason.
 
-List only the unsupported concrete details. Quote each one exactly as it appears in the post (a short phrase of at most 12 words) and give a short reason.
+When in doubt, do not list it.
 
-Return only JSON: {"unsupported": [{"quote": "...", "reason": "..."}]}. Return {"unsupported": []} when every concrete detail is supported.`
+Return only JSON: {"unsupported": [{"quote": "...", "reason": "..."}]}. Return {"unsupported": []} when nothing needs listing.`
 
 /** The review's user message: the deduplicated evidence (capped), then the post. */
 export function buildReviewUser(body: string, evidence: string[]): string {
@@ -191,6 +192,24 @@ export function parseReview(raw: unknown, body: string): DetailReview {
   }
   return { ok: true, unsupported }
 }
+
+/** Tag on a post saved despite the review's flags, so the creator checks those lines before posting. */
+export const NEEDS_CHECK_TAG = 'needs-fact-check'
+
+/** Model-review refusals per run before save_post saves the post tagged instead, so an over-strict review never loses a draft. */
+export const REVIEW_REFUSALS_BEFORE_SAVE = 1
+
+/** What save_post does after the review: save, refuse (the agent rewrites), or save tagged NEEDS_CHECK_TAG. */
+export function decideAfterReview(review: DetailReview, refusalsSoFar: number): 'save' | 'refuse' | 'save-flagged' {
+  if (review.ok && review.unsupported.length === 0) return 'save'
+  return refusalsSoFar < REVIEW_REFUSALS_BEFORE_SAVE ? 'refuse' : 'save-flagged'
+}
+
+export function tagsWithNeedsCheck(tags: string[] | undefined): string[] {
+  return [...new Set([...(tags ?? []), NEEDS_CHECK_TAG])]
+}
+
+export const quoteList = (details: UnsupportedDetail[]) => details.map((d) => `"${d.quote}"`).join('; ')
 
 /** Appends every string and number inside a tool result to `out` (walks arrays and objects). */
 export function collectText(value: unknown, out: string[]): void {

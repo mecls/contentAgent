@@ -16,7 +16,9 @@ export async function reviewDetails(body: string, evidence: string[]): Promise<D
       user: buildReviewUser(body, evidence),
     })
     const review = parseReview(raw, body)
-    if (!review.ok) console.error('[review_details] unusable review response')
+    // Log what was flagged (quotes only), so an over-strict review can be checked for free.
+    if (review.ok) console.info('[review_details] flagged', review.unsupported.map((u) => u.quote))
+    else console.error('[review_details] unusable review response')
     return review
   } catch (e) {
     console.error('[review_details] failed', e)

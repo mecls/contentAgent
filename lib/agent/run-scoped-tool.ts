@@ -26,7 +26,14 @@ import { listCompetitorPosts } from '@/lib/db/competitors'
 import { runResearchIfStale } from '@/lib/integrations/run-research'
 import { analyzeFormatTrends } from '@/lib/integrations/analyze-formats'
 import { writeContentDraft } from './write-content'
-import { findUnsourcedDetails } from './sourced-details'
+import {
+  findUnsourcedDetails,
+  decideAfterReview,
+  tagsWithNeedsCheck,
+  quoteList,
+  NEEDS_CHECK_TAG,
+  type UnsupportedDetail,
+} from './sourced-details'
 import { reviewDetails } from './review-details'
 
 /**
@@ -49,6 +56,8 @@ export interface ToolContext {
    * analytics results). When set, save_post refuses a body with a detail not in it.
    */
   evidence?: string[]
+  /** save_post's model-review refusals so far this run (shared and mutable). */
+  reviewRefusals?: { count: number }
   /** Aborts in-flight model calls inside a tool when the client disconnects. */
   signal?: AbortSignal
 }
@@ -93,8 +102,9 @@ export async function runScopedTool(
     case 'save_post': {
       const input = SavePostInput.parse(rawInput)
       // Real stories only, enforced: a number, amount, duration, clock time or weekday
-      // must come from something loaded this run, and a model review must find no
-      // unsupported scene or detail, or the post isn't saved.
+      // must come from something loaded this run, or the post isn't saved; then a
+      // model review looks for invented moments (below).
+      let needsCheck: { unsupported: UnsupportedDetail[]; reviewed: boolean } | null = null
       if (ctx.evidence) {
         const unsourced = findUnsourcedDetails(input.body, ctx.evidence)
         if (unsourced.length > 0) {
@@ -104,22 +114,26 @@ export async function runScopedTool(
             error: `Not saved: these details don't appear in the skill, the research or search results loaded in this chat, or the creator's messages: ${unsourced.join(', ')}. Remove each one or make its line general (call write_content again with the fix in notes), then save again. If a detail is real, load its source first (read_skill, list_research or search_news) or ask the creator.`,
           }
         }
-        // Then a model review for what the pattern check can't see: invented scenes
-        // and details with no number or day.
+        // Then a model review for what the pattern check can't see: invented moments with
+        // no number or day. It refuses once; if the rewrite is still flagged (or the
+        // review fails twice) the post is saved tagged NEEDS_CHECK_TAG instead, so an
+        // over-strict review never loses a draft, and the creator is shown the lines.
         const review = await reviewDetails(input.body, ctx.evidence)
-        if (!review.ok) {
-          return {
-            saved: false,
-            error:
-              "Not saved: the detail review couldn't run. Call save_post again with the same body. If it fails again, tell the creator the post couldn't be checked and wasn't saved.",
+        const refusals = ctx.reviewRefusals ?? { count: 0 }
+        const decision = decideAfterReview(review, refusals.count)
+        if (decision === 'refuse') {
+          refusals.count++
+          if (!review.ok) {
+            return { saved: false, error: "Not saved: the detail review couldn't run. Call save_post again with the same body." }
           }
-        }
-        if (review.unsupported.length > 0) {
           return {
             saved: false,
             unsupported: review.unsupported,
-            error: `Not saved: the detail review found details the sources loaded in this chat don't support: ${review.unsupported.map((u) => `"${u.quote}"`).join('; ')}. Rewrite each as a plain general statement or cut it (call write_content again with the fix in notes), then save again. If one is real, ask the creator to confirm it.`,
+            error: `Not saved: the detail review found moments the sources loaded in this chat don't support: ${quoteList(review.unsupported)}. Rewrite each as a plain general statement or cut it (call write_content again with the fix in notes), then save again. If one is real, ask the creator to confirm it. If the review still flags lines on the next save, the post is saved tagged ${NEEDS_CHECK_TAG} and you must show the creator those lines.`,
           }
+        }
+        if (decision === 'save-flagged') {
+          needsCheck = review.ok ? { unsupported: review.unsupported, reviewed: true } : { unsupported: [], reviewed: false }
         }
       }
       // Pin format to a canonical catalog key when it matches; else keep a
@@ -136,9 +150,19 @@ export async function runScopedTool(
         skill_slug: input.skill_slug ?? null,
         conversation_id: ctx.conversationId ?? null,
         source: 'agent',
-        tags: input.tags,
+        tags: needsCheck ? tagsWithNeedsCheck(input.tags) : input.tags,
       })
       ctx.emit?.({ post: { id, hook: input.hook ?? input.body.slice(0, 80) } })
+      if (needsCheck) {
+        return {
+          id,
+          saved: true,
+          needs_fact_check: needsCheck.unsupported,
+          note: needsCheck.reviewed
+            ? `Saved as a draft tagged ${NEEDS_CHECK_TAG}: the detail review still flags ${quoteList(needsCheck.unsupported)}. Show the creator these exact lines and tell them to verify or cut each one before posting.`
+            : `Saved as a draft tagged ${NEEDS_CHECK_TAG}: the detail review couldn't run, so its moments and details are unchecked. Tell the creator to check them before posting.`,
+        }
+      }
       return { id, saved: true }
     }
     case 'list_posts': {

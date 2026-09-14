@@ -80,6 +80,7 @@ export async function runAgentLoop({
     conversationId,
     emit: emitEvent,
     evidence,
+    reviewRefusals: { count: 0 },
     signal,
     // write_content streams the writer model's prose straight to the UI AND folds
     // it into finalText, so the post appears live and survives a chat reload.

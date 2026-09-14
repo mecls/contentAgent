@@ -5,6 +5,11 @@ import {
   collectText,
   parseReview,
   buildReviewUser,
+  decideAfterReview,
+  tagsWithNeedsCheck,
+  quoteList,
+  NEEDS_CHECK_TAG,
+  REVIEW_SYSTEM,
   MAX_REVIEW_EVIDENCE_CHARS,
 } from '../lib/agent/sourced-details.ts'
 
@@ -97,6 +102,28 @@ check(
 )
 const dashed = parseReview({ unsupported: [{ quote: 'a 5-day rollout', reason: '' }] }, 'A 5‑day rollout.')
 check('review quotes match across dash variants', dashed.ok && dashed.unsupported.length === 1)
+
+// ── what save_post does after the review ──
+const flaggedReview = { ok: true, unsupported: [{ quote: 'the call you took last winter', reason: '' }] }
+check('a clean review saves', decideAfterReview({ ok: true, unsupported: [] }, 0) === 'save')
+check(
+  'a flagged review refuses once, then saves tagged',
+  decideAfterReview(flaggedReview, 0) === 'refuse' && decideAfterReview(flaggedReview, 1) === 'save-flagged',
+)
+check(
+  'a failed review refuses once, then saves tagged',
+  decideAfterReview({ ok: false }, 0) === 'refuse' && decideAfterReview({ ok: false }, 1) === 'save-flagged',
+)
+check(
+  'the needs-fact-check tag is added once',
+  JSON.stringify(tagsWithNeedsCheck(['ai', NEEDS_CHECK_TAG])) === JSON.stringify(['ai', NEEDS_CHECK_TAG]) &&
+    JSON.stringify(tagsWithNeedsCheck(undefined)) === JSON.stringify([NEEDS_CHECK_TAG]),
+)
+check('flagged lines are quoted for the agent', quoteList([{ quote: 'a', reason: '' }, { quote: 'b', reason: '' }]) === '"a"; "b"')
+check(
+  'the review prompt keeps kinds of work and evidence terms out of scope',
+  REVIEW_SYSTEM.includes('kinds of work') && REVIEW_SYSTEM.includes('appears in the EVIDENCE') && REVIEW_SYSTEM.includes('When in doubt, do not list it'),
+)
 
 const user = buildReviewUser('POST BODY', ['same', 'same', 'x'.repeat(MAX_REVIEW_EVIDENCE_CHARS + 500)])
 check(
