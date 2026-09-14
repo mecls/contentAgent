@@ -53,6 +53,7 @@ function normalize(text: string): string {
     .toLowerCase()
     .replace(/[‐-―−]/g, '-')
     .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
     .replace(/[  ]/g, ' ')
 }
 
@@ -122,6 +123,73 @@ export function findUnsourcedDetails(body: string, evidence: string[]): string[]
     .sort((a, b) => a.at - b.at)
     .map((f) => f.snippet)
     .filter((s) => (seen.has(s) ? false : (seen.add(s), true)))
+}
+
+// ── model review ─────────────────────────────────────────────────────────────
+// The pattern check can't see invented scenes with no number or day ("the call you
+// took last winter"), so save_post also asks the writer model which concrete
+// details the evidence doesn't support. These are the pure parts (prompt and
+// parsing); lib/agent/review-details.ts makes the call.
+
+export const MAX_REVIEW_EVIDENCE_CHARS = 150_000
+const MAX_UNSUPPORTED = 12
+
+export interface UnsupportedDetail {
+  quote: string
+  reason: string
+}
+export type DetailReview = { ok: true; unsupported: UnsupportedDetail[] } | { ok: false }
+
+export const REVIEW_SYSTEM = `You check a social media post for invented details before it is saved. The creator publishes only real stories and facts.
+
+Find every concrete detail in the POST: a specific scene, situation, incident, event, story, conversation, quote, person, customer, company, product, place, time, season, count or number — including situations written to the reader as "you" (for example "the call you took last winter", "the review scheduled between two meetings and a fire drill", "You have three").
+
+A detail is SUPPORTED when the EVIDENCE states it or plainly describes the same thing: a figure a source reports, a line or object the skill records, or something the creator said. The wording may differ.
+
+Do not list:
+- general statements and opinions with no specific scene ("reporting drags into the night", "coordination eats the day");
+- the creator's own framing, positioning and questions ("this is the problem I work on", "which one sounds like you?");
+- ordinary terms of the trade (invoices, tickets, pipeline).
+
+List only the unsupported concrete details. Quote each one exactly as it appears in the post (a short phrase of at most 12 words) and give a short reason.
+
+Return only JSON: {"unsupported": [{"quote": "...", "reason": "..."}]}. Return {"unsupported": []} when every concrete detail is supported.`
+
+/** The review's user message: the deduplicated evidence (capped), then the post. */
+export function buildReviewUser(body: string, evidence: string[]): string {
+  let sources = [...new Set(evidence.map((e) => e.trim()).filter(Boolean))].join('\n\n')
+  if (sources.length > MAX_REVIEW_EVIDENCE_CHARS) sources = sources.slice(0, MAX_REVIEW_EVIDENCE_CHARS)
+  return ['EVIDENCE (the only real sources):', '<<<', sources, '>>>', '', 'POST:', '<<<', body, '>>>'].join('\n')
+}
+
+const foldQuote = (s: string) =>
+  normalize(s)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^["']+|["'.,;:!?]+$/g, '')
+
+/**
+ * Validates the review model's JSON. `{ ok: false }` when it isn't the expected
+ * shape. Quotes that don't occur in the post are dropped: the agent can't rewrite a
+ * line that isn't there, and keeping them would loop the save.
+ */
+export function parseReview(raw: unknown, body: string): DetailReview {
+  const list = raw && typeof raw === 'object' ? (raw as { unsupported?: unknown }).unsupported : undefined
+  if (!Array.isArray(list)) return { ok: false }
+  const post = normalize(body).replace(/\s+/g, ' ')
+  const seen = new Set<string>()
+  const unsupported: UnsupportedDetail[] = []
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue
+    const { quote, reason } = item as { quote?: unknown; reason?: unknown }
+    if (typeof quote !== 'string') continue
+    const folded = foldQuote(quote)
+    if (!folded || !post.includes(folded) || seen.has(folded)) continue
+    seen.add(folded)
+    unsupported.push({ quote: quote.trim(), reason: typeof reason === 'string' ? reason.trim() : '' })
+    if (unsupported.length === MAX_UNSUPPORTED) break
+  }
+  return { ok: true, unsupported }
 }
 
 /** Appends every string and number inside a tool result to `out` (walks arrays and objects). */

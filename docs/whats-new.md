@@ -22,8 +22,10 @@ this session, and how each one works under the hood.
 - **Saving checks the details.** Before a post is saved, every number, amount, percentage,
   duration ("three weeks"), clock time and weekday in it must appear in the skill, the research or
   search results the agent loaded in that chat, or your messages. If one doesn't, the post isn't
-  saved and the agent rewrites the line. Invented details without a number or day (an invented
-  object or scene) can still slip through, so read drafts before posting.
+  saved and the agent rewrites the line. A model review then checks the concrete scenes and details
+  that have no number or day (an invented situation, say) against the same sources and sends
+  unsupported ones back the same way. Each save makes one extra model call. The review can miss
+  things, so still read drafts before posting.
 
 ---
 

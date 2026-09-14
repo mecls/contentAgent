@@ -1,17 +1,25 @@
 // Free contract check for lib/agent/sourced-details.ts — no model call, no network.
 // Run: node --experimental-strip-types scripts/check-sourced-details.mjs
-import { findUnsourcedDetails, collectText } from '../lib/agent/sourced-details.ts'
+import {
+  findUnsourcedDetails,
+  collectText,
+  parseReview,
+  buildReviewUser,
+  MAX_REVIEW_EVIDENCE_CHARS,
+} from '../lib/agent/sourced-details.ts'
 
 let failed = 0
-function expect(name, body, evidence, want) {
-  const got = findUnsourcedDetails(body, evidence)
-  const passed = JSON.stringify(got) === JSON.stringify(want)
+function check(name, passed, detail = '') {
   if (passed) {
     console.log(`ok: ${name}`)
   } else {
     failed++
-    console.log(`FAIL: ${name} — got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`)
+    console.log(`FAIL: ${name}${detail ? ` — ${detail}` : ''}`)
   }
+}
+function expect(name, body, evidence, want) {
+  const got = findUnsourcedDetails(body, evidence)
+  check(name, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`)
 }
 
 // Made-up skill text: weekdays appear, but only as posting guidance.
@@ -27,6 +35,7 @@ const RESEARCH = [
   'Startup Acme raises $120M at $1.5B valuation',
 ]
 
+// ── pattern check ──
 expect(
   'invented days and durations are caught',
   "Chasing a supplier who said they'd deliver Tuesday and it's now Thursday\nAnswering a client you haven't called in six weeks",
@@ -60,11 +69,40 @@ expect('invented amounts are caught', 'Not a $60k hire. Room 3B.', SKILL, ['$60k
 
 const out = []
 collectText({ skill_md: 'a', items: [{ summary: 'b', score: 7 }, null], n: 3 }, out)
-if (JSON.stringify(out) === JSON.stringify(['a', 'b', '7', '3'])) {
-  console.log('ok: collectText walks nested strings and numbers')
-} else {
-  failed++
-  console.log(`FAIL: collectText — got ${JSON.stringify(out)}`)
-}
+check('collectText walks nested strings and numbers', JSON.stringify(out) === JSON.stringify(['a', 'b', '7', '3']))
+
+// ── model review parsing ──
+const POST = 'The call you took last winter.\nReporting drags into the night.\nNot another dashboard. You have three.'
+const review = parseReview(
+  {
+    unsupported: [
+      { quote: 'the call you took last winter', reason: 'not in the sources' },
+      { quote: '“You have three.”', reason: 'invented count' },
+      { quote: 'a line the model made up', reason: 'not in the post' },
+      { quote: 'The call you took last winter', reason: 'duplicate' },
+    ],
+  },
+  POST,
+)
+check(
+  'review keeps quotes found in the post, drops made-up and duplicate ones',
+  review.ok && JSON.stringify(review.unsupported.map((u) => u.quote)) === JSON.stringify(['the call you took last winter', '“You have three.”']),
+  JSON.stringify(review),
+)
+const clean = parseReview({ unsupported: [] }, POST)
+check('a review with nothing unsupported passes', clean.ok && clean.unsupported.length === 0)
+check(
+  'an unusable review response fails closed',
+  !parseReview(null, POST).ok && !parseReview({ verdict: 'fine' }, POST).ok && !parseReview('{"unsupported":[]}', POST).ok,
+)
+const dashed = parseReview({ unsupported: [{ quote: 'a 5-day rollout', reason: '' }] }, 'A 5‑day rollout.')
+check('review quotes match across dash variants', dashed.ok && dashed.unsupported.length === 1)
+
+const user = buildReviewUser('POST BODY', ['same', 'same', 'x'.repeat(MAX_REVIEW_EVIDENCE_CHARS + 500)])
+check(
+  'review prompt dedupes and caps the evidence, then includes the post',
+  user.split('same').length === 2 && user.endsWith('POST BODY\n>>>') && user.length < MAX_REVIEW_EVIDENCE_CHARS + 200,
+  `length ${user.length}`,
+)
 
 process.exit(failed ? 1 : 0)

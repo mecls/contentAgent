@@ -27,6 +27,7 @@ import { runResearchIfStale } from '@/lib/integrations/run-research'
 import { analyzeFormatTrends } from '@/lib/integrations/analyze-formats'
 import { writeContentDraft } from './write-content'
 import { findUnsourcedDetails } from './sourced-details'
+import { reviewDetails } from './review-details'
 
 /**
  * UI side-channel. Tools return a JSON result to the MODEL, but some actions also
@@ -92,7 +93,8 @@ export async function runScopedTool(
     case 'save_post': {
       const input = SavePostInput.parse(rawInput)
       // Real stories only, enforced: a number, amount, duration, clock time or weekday
-      // must come from something loaded this run, or the post isn't saved.
+      // must come from something loaded this run, and a model review must find no
+      // unsupported scene or detail, or the post isn't saved.
       if (ctx.evidence) {
         const unsourced = findUnsourcedDetails(input.body, ctx.evidence)
         if (unsourced.length > 0) {
@@ -100,6 +102,23 @@ export async function runScopedTool(
             saved: false,
             unsourced,
             error: `Not saved: these details don't appear in the skill, the research or search results loaded in this chat, or the creator's messages: ${unsourced.join(', ')}. Remove each one or make its line general (call write_content again with the fix in notes), then save again. If a detail is real, load its source first (read_skill, list_research or search_news) or ask the creator.`,
+          }
+        }
+        // Then a model review for what the pattern check can't see: invented scenes
+        // and details with no number or day.
+        const review = await reviewDetails(input.body, ctx.evidence)
+        if (!review.ok) {
+          return {
+            saved: false,
+            error:
+              "Not saved: the detail review couldn't run. Call save_post again with the same body. If it fails again, tell the creator the post couldn't be checked and wasn't saved.",
+          }
+        }
+        if (review.unsupported.length > 0) {
+          return {
+            saved: false,
+            unsupported: review.unsupported,
+            error: `Not saved: the detail review found details the sources loaded in this chat don't support: ${review.unsupported.map((u) => `"${u.quote}"`).join('; ')}. Rewrite each as a plain general statement or cut it (call write_content again with the fix in notes), then save again. If one is real, ask the creator to confirm it.`,
           }
         }
       }
