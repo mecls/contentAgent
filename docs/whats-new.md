@@ -5,6 +5,23 @@ this session, and how each one works under the hood.
 
 ---
 
+## Update 2026-09-14 — Choose, model picker, real stories only
+
+- **Choose is the home page (`/app`).** One click proposes 3 post angles from the skill and the last
+  7 days of research. Each is marked "Sourced" (with its links) or "Needs your story" (with a
+  question for you). Reject angles with a reason and ask for a new batch that avoids them; **Draft
+  this** opens the chat with the prompt ready. Only the current batch is kept, and only your click
+  calls the model.
+- **The chat moved to `/app/chat`.** Old `/app?c=` links redirect.
+- **Model picker.** A button in the chat composer picks the planning model from the Ollama Cloud
+  models that support tools. The choice is saved for your account; post text is still written by
+  the writer model.
+- **Real stories only.** Drafts use only stories and events from the skill, a cited source, or what
+  you say in the chat. When a post needs a story that doesn't exist, the agent asks instead of
+  inventing one.
+
+---
+
 ## Update 2026-09-13 — skill recovery
 
 Post quality had dropped because the agent kept rewriting its own skill, so these

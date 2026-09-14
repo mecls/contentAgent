@@ -52,9 +52,16 @@ your account.
 
 ## How it works
 
-- **Chat** (`/app`): streaming agent. Before writing, it reads the skill's
-  `SKILL.md` (`read_skill`) and follows its constraints. Finished posts are saved
-  via `save_post` and appear under **Posts**.
+- **Choose** (`/app`, the home page): click **Propose angles** to get 3 post
+  angles from your skill and the last 7 days of research. Reject angles with a
+  reason to steer the next batch; **Draft this** opens the chat with a drafting
+  prompt. Only that click calls the model.
+- **Chat** (`/app/chat`): streaming agent. Before writing, it reads the skill's
+  `SKILL.md` (`read_skill`) and follows its constraints. It drafts only from real
+  stories and events (the skill, a cited source, or what you tell it) and asks
+  when it needs one. The model button in the composer picks the planning model
+  from the Ollama Cloud models that support tools. Finished posts are saved via
+  `save_post` and appear under **Posts**.
 - **The skill is read-only to the agent:** no tool can change it. You edit
   `SKILL.md` on the **Skills** page; every save is versioned and restorable.
   Corrections you give in chat aren't remembered unless you add them there.
