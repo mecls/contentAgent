@@ -26,6 +26,7 @@ import { listCompetitorPosts } from '@/lib/db/competitors'
 import { runResearchIfStale } from '@/lib/integrations/run-research'
 import { analyzeFormatTrends } from '@/lib/integrations/analyze-formats'
 import { writeContentDraft } from './write-content'
+import { findUnsourcedDetails } from './sourced-details'
 
 /**
  * UI side-channel. Tools return a JSON result to the MODEL, but some actions also
@@ -42,6 +43,11 @@ export interface ToolContext {
    * from `emit`, which carries structured UI events.
    */
   emitText?: (text: string) => void
+  /**
+   * Text from real sources seen this run (the creator's messages, skill, research and
+   * analytics results). When set, save_post refuses a body with a detail not in it.
+   */
+  evidence?: string[]
   /** Aborts in-flight model calls inside a tool when the client disconnects. */
   signal?: AbortSignal
 }
@@ -85,6 +91,18 @@ export async function runScopedTool(
     // ── posts ──
     case 'save_post': {
       const input = SavePostInput.parse(rawInput)
+      // Real stories only, enforced: a number, amount, duration, clock time or weekday
+      // must come from something loaded this run, or the post isn't saved.
+      if (ctx.evidence) {
+        const unsourced = findUnsourcedDetails(input.body, ctx.evidence)
+        if (unsourced.length > 0) {
+          return {
+            saved: false,
+            unsourced,
+            error: `Not saved: these details don't appear in the skill, the research or search results loaded in this chat, or the creator's messages: ${unsourced.join(', ')}. Remove each one or make its line general (call write_content again with the fix in notes), then save again. If a detail is real, load its source first (read_skill, list_research or search_news) or ask the creator.`,
+          }
+        }
+      }
       // Pin format to a canonical catalog key when it matches; else keep a
       // lowercased fallback so the value still groups in formatPerformance.
       const format = input.format

@@ -19,6 +19,11 @@ this session, and how each one works under the hood.
 - **Real stories only.** Drafts use only stories and events from the skill, a cited source, or what
   you say in the chat. When a post needs a story that doesn't exist, the agent asks instead of
   inventing one.
+- **Saving checks the details.** Before a post is saved, every number, amount, percentage,
+  duration ("three weeks"), clock time and weekday in it must appear in the skill, the research or
+  search results the agent loaded in that chat, or your messages. If one doesn't, the post isn't
+  saved and the agent rewrites the line. Invented details without a number or day (an invented
+  object or scene) can still slip through, so read drafts before posting.
 
 ---
 

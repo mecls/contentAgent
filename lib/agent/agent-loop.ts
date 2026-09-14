@@ -3,6 +3,7 @@ import { openai, llmModelHeavy, llmMaxTokens } from './llm'
 import { SYSTEM_PROMPT } from './system-prompt'
 import { CONTENT_TOOLS } from './tools'
 import { runScopedTool, type ToolContext } from './run-scoped-tool'
+import { EVIDENCE_TOOLS, collectText } from './sourced-details'
 
 const MAX_ITERS = 10
 
@@ -67,10 +68,18 @@ export async function runAgentLoop({
     { role: 'user', content: prompt },
   ]
   let finalText = ''
+  // What the agent has seen from real sources this run: the creator's messages, then
+  // skill, research and analytics results as they arrive. save_post checks a post's
+  // concrete details against it.
+  const evidence: string[] = [
+    prompt,
+    ...history.flatMap((m) => (m.role === 'user' && typeof m.content === 'string' ? [m.content] : [])),
+  ]
   const toolCtx: ToolContext = {
     accountId,
     conversationId,
     emit: emitEvent,
+    evidence,
     signal,
     // write_content streams the writer model's prose straight to the UI AND folds
     // it into finalText, so the post appears live and survives a chat reload.
@@ -144,6 +153,7 @@ export async function runAgentLoop({
       try {
         const parsed = t.args ? JSON.parse(t.args) : {}
         result = await runScopedTool(t.name, parsed, toolCtx)
+        if (EVIDENCE_TOOLS.has(t.name)) collectText(result, evidence)
       } catch (e) {
         result = { error: e instanceof Error ? e.message : 'tool error' }
       }
