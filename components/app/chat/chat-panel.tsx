@@ -20,6 +20,7 @@ import {
 } from './use-agent-chat'
 import { MarkdownLite } from './markdown-lite'
 import { ThinkingTrace } from './thinking-trace'
+import { ModelPicker } from './model-picker'
 
 const SUGGESTIONS = [
   'Draft a LinkedIn post about AI replacing junior engineers',
@@ -70,10 +71,12 @@ export function ChatPanel({
   conversationId,
   initialMessages = [],
   initialPrompt,
+  initialModel,
 }: {
   conversationId?: string | null
   initialMessages?: InitialMessage[]
   initialPrompt?: string
+  initialModel: string
 }) {
   const { messages, isStreaming, send, stop } = useAgentChat({
     conversationId,
@@ -152,6 +155,7 @@ export function ChatPanel({
                 {a.label}
               </button>
             ))}
+            <ModelPicker initialModel={initialModel} disabled={isStreaming} />
           </div>
 
           <div className="flex items-end gap-2">

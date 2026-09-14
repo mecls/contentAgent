@@ -5,6 +5,7 @@ import { runAgentLoop } from '@/lib/agent/agent-loop'
 import { buildSkillsIndexNote } from '@/lib/skills/store'
 import { buildProfileNote } from '@/lib/db/profile'
 import { buildTagsNote } from '@/lib/db/posts'
+import { getChatModel } from '@/lib/agent/models'
 import {
   createConversation,
   getConversation,
@@ -86,6 +87,9 @@ export async function POST(req: NextRequest) {
     tagsNote = ''
   }
 
+  // The planning model this account picked in the chat (falls back to the heavy default).
+  const chatModel = await getChatModel(accountId)
+
   const encoder = new TextEncoder()
   let closed = false
   const convId = conversationId
@@ -110,6 +114,7 @@ export async function POST(req: NextRequest) {
           prompt,
           accountId,
           conversationId: convId,
+          model: chatModel,
           systemNotes: [skillsNote, profileNote, tagsNote].filter(Boolean),
           history,
           emit: (text) => send({ t: text }),

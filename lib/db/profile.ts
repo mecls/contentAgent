@@ -1,30 +1,13 @@
 import { supabaseService } from '@/lib/supabase/service'
 import { listSkills } from '@/lib/skills/store'
 import { platformLabel, type OnboardingProfile } from '@/lib/onboarding/schema'
+import { getConfig, setConfig } from '@/lib/db/config'
 
 /**
  * Onboarding state + the captured profile live in the shared `config` table
  * (account_id, key, value jsonb) — no extra migration needed. `content_profile`
  * holds the answers; `onboarded` is the completion flag.
  */
-
-async function getConfig(accountId: string, key: string): Promise<unknown> {
-  const { data, error } = await supabaseService()
-    .from('config')
-    .select('value')
-    .eq('account_id', accountId)
-    .eq('key', key)
-    .maybeSingle()
-  if (error) throw new Error(`getConfig(${key}) failed: ${error.message}`)
-  return data?.value ?? null
-}
-
-async function setConfig(accountId: string, key: string, value: unknown): Promise<void> {
-  const { error } = await supabaseService()
-    .from('config')
-    .upsert({ account_id: accountId, key, value }, { onConflict: 'account_id,key' })
-  if (error) throw new Error(`setConfig(${key}) failed: ${error.message}`)
-}
 
 export async function getProfile(accountId: string): Promise<OnboardingProfile | null> {
   return (await getConfig(accountId, 'content_profile')) as OnboardingProfile | null

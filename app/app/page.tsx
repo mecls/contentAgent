@@ -2,6 +2,7 @@ import { requireAccountId } from '@/lib/auth/session'
 import { getConversation, listMessages } from '@/lib/db/conversations'
 import { ChatPanel } from '@/components/app/chat/chat-panel'
 import type { InitialMessage } from '@/components/app/chat/use-agent-chat'
+import { getChatModel } from '@/lib/agent/models'
 
 export default async function ChatPage({
   searchParams,
@@ -10,6 +11,7 @@ export default async function ChatPage({
 }) {
   const { accountId } = await requireAccountId()
   const { c, prompt } = await searchParams
+  const chatModel = await getChatModel(accountId)
 
   let conversationId: string | null = null
   let initialMessages: InitialMessage[] = []
@@ -34,6 +36,7 @@ export default async function ChatPage({
       conversationId={conversationId}
       initialMessages={initialMessages}
       initialPrompt={c ? undefined : prompt}
+      initialModel={chatModel}
     />
   )
 }
