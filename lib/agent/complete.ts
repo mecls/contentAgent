@@ -23,8 +23,22 @@ export async function completeJSON<T = unknown>(args: {
       { role: 'user', content: args.user },
     ],
   })
-  const text = res.choices[0]?.message?.content ?? ''
-  return parseJsonLoose<T>(text)
+  const choice = res.choices[0]
+  const text = choice?.message?.content ?? ''
+  const parsed = parseJsonLoose<T>(text)
+  if (parsed === null) {
+    // Say why, so a failure is diagnosable from the logs (e.g. a reasoning model
+    // spending the whole token budget before writing any content).
+    const message = choice?.message as { reasoning?: string; reasoning_content?: string } | undefined
+    console.error('[completeJSON] unparseable response', {
+      model: args.model ?? llmModel(),
+      finish_reason: choice?.finish_reason ?? null,
+      content_chars: text.length,
+      reasoning_chars: (message?.reasoning ?? message?.reasoning_content ?? '').length,
+      completion_tokens: res.usage?.completion_tokens ?? null,
+    })
+  }
+  return parsed
 }
 
 /** Parse JSON from a model response that may wrap it in prose or code fences. */

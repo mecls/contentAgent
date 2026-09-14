@@ -69,7 +69,8 @@ export async function generateBatch({
   const inputs = await loadGenerationInputs(accountId, slug)
   const raw = await completeJSON({
     model: await getChatModel(accountId),
-    maxTokens: 3000,
+    // No explicit limit: reasoning models spend output tokens thinking first, and
+    // 3,000 left glm-5.2 no room for the JSON. Uses LLM_MAX_TOKENS like other calls.
     system: systemPrompt(),
     user: userPrompt(inputs, focus),
   })
