@@ -146,7 +146,7 @@ export const CONTENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           source_material: {
             type: 'string',
             description:
-              'Facts to ground the post in (article details from search_news, research items). The writer must add no facts beyond these.',
+              "The only real stories, events and facts the post may use. Each must come from SKILL.md, a cited source, or the creator's own words in this chat. Never pass an invented or illustrative story.",
           },
           notes: {
             type: 'string',

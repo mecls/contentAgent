@@ -20,7 +20,7 @@ PLAIN TEXT ONLY: the body is pasted directly into the platform composer (LinkedI
 
 NO STAGE DIRECTIONS: never include placeholders or art direction like "[image here]", "[insert chart]", or "[Before: screenshot]". Output only the words of the post.
 
-HONESTY: never invent the creator's own customers, clients, metrics, or case studies. Use only the facts in the brief and source material. If a specific fact is missing, write around it — do not fabricate it.
+HONESTY: never invent the creator's own customers, clients, metrics, or case studies. Use only the facts in the brief and source material. Use only the stories, events and facts in the brief and source material. Never invent a story, event, conversation, quote or moment. If the brief needs one that isn't provided, leave it out rather than make one up.
 
 Output the post body only. No preamble, no sign-off about what you did, no surrounding quotes.`
 
