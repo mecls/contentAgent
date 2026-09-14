@@ -146,7 +146,7 @@ export const CONTENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           source_material: {
             type: 'string',
             description:
-              "The only real stories, events and facts the post may use. Each must come from SKILL.md, a cited source, or the creator's own words in this chat. Never pass an invented or illustrative story.",
+              "The only real stories, events, facts and concrete details the post may use. Each must come from SKILL.md, a cited source, or the creator's own words in this chat. Never pass an invented or illustrative story, scenario or detail — including 'you' scenarios with unit numbers, incidents or dollar amounts.",
           },
           notes: {
             type: 'string',

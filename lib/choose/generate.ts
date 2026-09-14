@@ -20,7 +20,7 @@ function systemPrompt(): string {
       'HONESTY — every angle is exactly one of two kinds:',
       `- "sourced": about a real event or finding from the RESEARCH list. "sources" holds 1-${MAX_SOURCES} URLs copied exactly from that list. "story_prompt" is null.`,
       '- "your-story": it needs a real moment from the creator\'s own work. "sources" is []. "story_prompt" is one specific question asking the creator for that moment, ending in "?".',
-      'Never state a first-person memory, a customer, a result or a number as fact. Never invent a story or an event. Never use material the skill marks as unverified or hypothetical. If the RESEARCH list is empty, every angle must be "your-story".',
+      'Never state a first-person memory, a customer, a result or a number as fact. Never invent a story, an event, or a specific scenario or detail (unit numbers, incidents, dollar amounts), even one written as "you". Never use material the skill marks as unverified or hypothetical. If the RESEARCH list is empty, every angle must be "your-story".',
     ].join('\n'),
     `Length limits in characters: tribe ${LIMITS.tribe}, archetype ${LIMITS.archetype}, hook ${LIMITS.hook}, tension ${LIMITS.tension}, why_now ${LIMITS.why_now}, story_prompt ${LIMITS.story_prompt}.`,
     `Return ONLY JSON: {"angles":[{"tribe":"","archetype":"","hook":"","tension":"","why_now":"","provenance":"sourced","sources":[],"story_prompt":null}]} with exactly ${ANGLE_COUNT} angles. No commentary.`,
