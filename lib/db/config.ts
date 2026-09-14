@@ -23,3 +23,12 @@ export async function setConfig(accountId: string, key: string, value: unknown):
     .upsert({ account_id: accountId, key, value }, { onConflict: 'account_id,key' })
   if (error) throw new Error(`setConfig(${key}) failed: ${error.message}`)
 }
+
+export async function deleteConfig(accountId: string, key: string): Promise<void> {
+  const { error } = await supabaseService()
+    .from('config')
+    .delete()
+    .eq('account_id', accountId)
+    .eq('key', key)
+  if (error) throw new Error(`deleteConfig(${key}) failed: ${error.message}`)
+}

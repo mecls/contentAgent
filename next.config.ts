@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
   // 308 would keep redirecting even after a revert.
   async redirects() {
     return [
+      // The chat moved to /app/chat; old chat links (?c=, ?prompt=) keep working. The query carries over.
+      { source: '/app', has: [{ type: 'query', key: 'c' }], destination: '/app/chat', permanent: false },
+      { source: '/app', has: [{ type: 'query', key: 'prompt' }], destination: '/app/chat', permanent: false },
       { source: '/app/ideas', destination: '/app', permanent: false },
       { source: '/app/plan', destination: '/app', permanent: false },
     ]

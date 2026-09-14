@@ -158,7 +158,7 @@ export function useAgentChat({
               if (!conversationRef.current) {
                 conversationRef.current = payload.conv
                 // Reflect the new conversation in the URL without a full nav.
-                window.history.replaceState(null, '', `/app?c=${payload.conv}`)
+                window.history.replaceState(null, '', `/app/chat?c=${payload.conv}`)
               }
             } else if (payload.r) {
               patch((x) => ({

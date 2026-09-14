@@ -1,42 +1,28 @@
 import { requireAccountId } from '@/lib/auth/session'
-import { getConversation, listMessages } from '@/lib/db/conversations'
-import { ChatPanel } from '@/components/app/chat/chat-panel'
-import type { InitialMessage } from '@/components/app/chat/use-agent-chat'
-import { getChatModel } from '@/lib/agent/models'
+import { loadChooseState } from '@/lib/choose/inputs'
+import { ChooseView } from '@/components/choose/choose-view'
 
-export default async function ChatPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ c?: string; prompt?: string }>
-}) {
+/** Home: choose what to post next. Loading this page never calls a model. */
+export default async function ChoosePage() {
   const { accountId } = await requireAccountId()
-  const { c, prompt } = await searchParams
-  const chatModel = await getChatModel(accountId)
-
-  let conversationId: string | null = null
-  let initialMessages: InitialMessage[] = []
-
-  if (c) {
-    const conv = await getConversation(accountId, c)
-    if (conv) {
-      conversationId = conv.id
-      const msgs = await listMessages(accountId, c)
-      initialMessages = msgs.map((m) => ({
-        role: m.role === 'assistant' ? 'agent' : 'user',
-        body: m.content,
-        reasoning: m.reasoning,
-        createdAt: new Date(m.created_at).getTime(),
-      }))
-    }
-  }
+  const state = await loadChooseState(accountId)
 
   return (
-    <ChatPanel
-      key={conversationId ?? 'new'}
-      conversationId={conversationId}
-      initialMessages={initialMessages}
-      initialPrompt={c ? undefined : prompt}
-      initialModel={chatModel}
-    />
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-5xl px-6 py-8">
+        <header className="mb-6">
+          <h1 className="text-xl font-semibold text-neutral-900">Choose</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            Pick what to write next. Nothing is generated until you ask.
+          </p>
+        </header>
+        <ChooseView
+          batch={state.batch}
+          generating={state.generating}
+          hasSkill={state.skillSlug !== null}
+          researchCount={state.researchCount}
+        />
+      </div>
+    </div>
   )
 }

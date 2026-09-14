@@ -69,12 +69,15 @@ for f in \
 done
 ok "deleted files gone"
 
-if grep -q "source: '/app/ideas'" next.config.ts && grep -q "source: '/app/plan'" next.config.ts \
-  && [ "$(grep -c "permanent: false" next.config.ts)" = "2" ]; then
-  ok "redirects declared"
-else
-  fail "redirects declared" "$(grep -n "source:" next.config.ts || true)"
-fi
+missing=""
+for rule in \
+  "source: '/app/ideas', destination: '/app', permanent: false" \
+  "source: '/app/plan', destination: '/app', permanent: false" \
+  "source: '/app', has: [{ type: 'query', key: 'c' }], destination: '/app/chat', permanent: false" \
+  "source: '/app', has: [{ type: 'query', key: 'prompt' }], destination: '/app/chat', permanent: false"; do
+  grep -qF "$rule" next.config.ts || missing="$missing $rule;"
+done
+if [ -z "$missing" ]; then ok "redirects declared"; else fail "redirects declared" "missing:$missing"; fi
 
 # Nothing personal is tracked
 tracked=$(git ls-files private tasks archive seed)

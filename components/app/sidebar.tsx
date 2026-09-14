@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
+  Compass,
   FileText,
   MessageSquarePlus,
   Newspaper,
@@ -33,6 +34,7 @@ export function Sidebar({
   const activeConv = params.get('c')
 
   const navItems = [
+    { href: '/app', label: 'Choose', icon: Compass },
     { href: '/app/posts', label: 'Posts', icon: FileText },
     { href: '/app/research', label: 'Research', icon: Newspaper },
     { href: '/app/integrations', label: 'Integrations', icon: Plug },
@@ -57,7 +59,7 @@ export function Sidebar({
       {/* New chat */}
       <div className="px-3">
         <Link
-          href="/app"
+          href="/app/chat"
           className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)]"
         >
           <MessageSquarePlus className="h-4 w-4" aria-hidden />
@@ -75,11 +77,11 @@ export function Sidebar({
         ) : (
           <ul className="flex flex-col gap-0.5">
             {conversations.map((c) => {
-              const active = pathname === '/app' && activeConv === c.id
+              const active = pathname === '/app/chat' && activeConv === c.id
               return (
                 <li key={c.id} className="group relative">
                   <Link
-                    href={`/app?c=${c.id}`}
+                    href={`/app/chat?c=${c.id}`}
                     className={cn(
                       'block truncate rounded-lg px-2 py-1.5 pr-8 text-sm transition-colors',
                       active
@@ -112,7 +114,8 @@ export function Sidebar({
       {/* Section nav */}
       <nav className="border-t border-neutral-200/70 px-2 py-2">
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href)
+          // '/app' is the Choose page and every other page starts with it, so match it exactly.
+          const active = href === '/app' ? pathname === '/app' : pathname.startsWith(href)
           return (
             <Link
               key={href}

@@ -74,7 +74,7 @@ export function ResearchBrowser({ items }: { items: ResearchItem[] }) {
   }, [items, source, query])
 
   const draftInChat = (r: ResearchItem) => {
-    router.push(`/app?prompt=${encodeURIComponent(draftPromptFor(r))}`)
+    router.push(`/app/chat?prompt=${encodeURIComponent(draftPromptFor(r))}`)
   }
 
   return (
