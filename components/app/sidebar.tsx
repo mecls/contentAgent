@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, type MouseEvent } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
@@ -30,8 +31,24 @@ export function Sidebar({
   signOutAction: () => Promise<void>
 }) {
   const pathname = usePathname()
-  const params = useSearchParams()
-  const activeConv = params.get('c')
+  const query = useSearchParams().toString()
+  const location = query ? `${pathname}?${query}` : pathname
+
+  // Optimistic highlight: a click moves the active item at once, instead of when the
+  // server has finished rendering the next page. It holds only while the URL is still
+  // the one the click left from; once the URL moves (that navigation or any other,
+  // e.g. Back) it's dropped and the URL decides again.
+  const [pending, setPending] = useState<{ href: string; from: string } | null>(null)
+  if (pending && pending.from !== location) setPending(null)
+  const current = pending?.from === location ? pending.href : location
+  const [currentPath, currentQuery] = current.split('?')
+  const activeConv = new URLSearchParams(currentQuery).get('c')
+
+  const highlight = (href: string) => (e: MouseEvent) => {
+    // Modified clicks open another tab; this one stays where it is.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    setPending({ href, from: location })
+  }
 
   const navItems = [
     { href: '/app', label: 'Choose', icon: Compass },
@@ -60,6 +77,7 @@ export function Sidebar({
       <div className="px-3">
         <Link
           href="/app/chat"
+          onClick={highlight('/app/chat')}
           className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)]"
         >
           <MessageSquarePlus className="h-4 w-4" aria-hidden />
@@ -77,11 +95,16 @@ export function Sidebar({
         ) : (
           <ul className="flex flex-col gap-0.5">
             {conversations.map((c) => {
-              const active = pathname === '/app/chat' && activeConv === c.id
+              const active = currentPath === '/app/chat' && activeConv === c.id
               return (
                 <li key={c.id} className="group relative">
                   <Link
                     href={`/app/chat?c=${c.id}`}
+                    // The chat's loading.tsx makes every chat link prefetchable, and the list
+                    // is long: one request (plus a session check) per visible chat, on every
+                    // page. Opening a chat still highlights at once; only the skeleton waits.
+                    prefetch={false}
+                    onClick={highlight(`/app/chat?c=${c.id}`)}
                     className={cn(
                       'block truncate rounded-lg px-2 py-1.5 pr-8 text-sm transition-colors',
                       active
@@ -115,11 +138,12 @@ export function Sidebar({
       <nav className="border-t border-neutral-200/70 px-2 py-2">
         {navItems.map(({ href, label, icon: Icon }) => {
           // '/app' is the Choose page and every other page starts with it, so match it exactly.
-          const active = href === '/app' ? pathname === '/app' : pathname.startsWith(href)
+          const active = href === '/app' ? currentPath === '/app' : currentPath.startsWith(href)
           return (
             <Link
               key={href}
               href={href}
+              onClick={highlight(href)}
               className={cn(
                 'flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors',
                 active
