@@ -1,6 +1,6 @@
 import { getConfig } from '@/lib/db/config'
 import { listSkills, readSkill } from '@/lib/skills/store'
-import { listResearchItems, type ResearchRow } from '@/lib/db/research'
+import { listDailyResearch, type ResearchRow } from '@/lib/db/research'
 import { listPosts } from '@/lib/db/posts'
 import type { ChooseBatch } from '@/lib/choose/batch'
 
@@ -12,7 +12,6 @@ import type { ChooseBatch } from '@/lib/choose/batch'
 export const BATCH_KEY = 'choose_batch'
 export const GENERATING_KEY = 'choose_generating'
 export const GENERATION_LOCK_MS = 120_000
-const RESEARCH_WINDOW = { limit: 20, sinceDays: 7 } as const
 
 export interface RecentPost {
   hook: string | null
@@ -56,7 +55,7 @@ export async function loadChooseState(accountId: string): Promise<ChooseState> {
     getCurrentBatch(accountId),
     isGenerating(accountId),
     pickSkill(accountId),
-    listResearchItems(accountId, RESEARCH_WINDOW),
+    listDailyResearch(accountId),
   ])
   return { batch, generating, skillSlug, researchCount: research.length }
 }
@@ -71,7 +70,7 @@ export interface GenerationInputs {
 export async function loadGenerationInputs(accountId: string, slug: string): Promise<GenerationInputs> {
   const [skill, research, posts, current] = await Promise.all([
     readSkill(accountId, slug),
-    listResearchItems(accountId, RESEARCH_WINDOW),
+    listDailyResearch(accountId),
     listPosts(accountId),
     getCurrentBatch(accountId),
   ])

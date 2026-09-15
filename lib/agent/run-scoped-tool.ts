@@ -20,7 +20,7 @@ import * as skills from '@/lib/skills/store'
 import * as posts from '@/lib/db/posts'
 import { DEFAULT_PLATFORM, normalizeFormatKey } from '@/lib/formats/catalog'
 import { reconcileScrapedMetrics } from '@/lib/integrations/reconcile'
-import { listResearchItems, upsertResearchItems } from '@/lib/db/research'
+import { listDailyResearch, upsertResearchItems } from '@/lib/db/research'
 import { exaSearch } from '@/lib/integrations/exa'
 import { listCompetitorPosts } from '@/lib/db/competitors'
 import { runResearchIfStale } from '@/lib/integrations/run-research'
@@ -202,7 +202,7 @@ export async function runScopedTool(
     // ── research & competitor insights ──
     case 'list_research': {
       ListResearchInput.parse(rawInput ?? {})
-      const items = await listResearchItems(accountId, { limit: 20, sinceDays: 7 })
+      const items = await listDailyResearch(accountId)
       // Render the top items as inline cards (with a "Draft post" action) for the user.
       ctx.emit?.({
         researchItems: items.slice(0, 8).map((r) => ({
@@ -235,10 +235,11 @@ export async function runScopedTool(
       if (found.length === 0) {
         return { found: 0, query: input.query }
       }
-      // Persist to the research archive (best-effort — a DB hiccup must not abort
-      // the draft the creator is waiting on).
+      // Persist to the research archive as 'chat' (best-effort — a DB hiccup must not
+      // abort the draft the creator is waiting on). The Research page shows these;
+      // Choose and list_research don't, so one post's searches can't steer them.
       try {
-        await upsertResearchItems(accountId, found)
+        await upsertResearchItems(accountId, found, 'chat')
       } catch (e) {
         console.error('[search_news] persist failed', e)
       }

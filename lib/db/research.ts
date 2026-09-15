@@ -1,5 +1,6 @@
 import { supabaseService } from '@/lib/supabase/service'
 import type { ResearchItem } from '@/lib/integrations/exa'
+import { RESEARCH_WINDOW, pickResearchWindow } from '@/lib/integrations/research-window'
 
 /**
  * Account-scoped storage for daily research items. Mirrors lib/db/scraped-posts.ts
@@ -20,10 +21,18 @@ export interface ResearchRow {
   fetched_at: string
 }
 
-/** Upsert on (account_id, url) so re-seeing an article refreshes it, no dupes. */
+/** 'daily' = the research run, which follows the research focus; 'chat' = search_news while drafting. */
+export type ResearchOrigin = 'daily' | 'chat'
+
+/**
+ * Upsert on (account_id, url), no dupes. A daily run refreshes an article it sees
+ * again and claims it as daily. A chat search only adds URLs that are new: it must
+ * not move an existing item to the top or relabel it.
+ */
 export async function upsertResearchItems(
   accountId: string,
   items: ResearchItem[],
+  origin: ResearchOrigin,
 ): Promise<number> {
   if (items.length === 0) return 0
   // De-dupe within the batch (same url across sources/queries) — keep first.
@@ -41,11 +50,12 @@ export async function upsertResearchItems(
       score: it.score,
       published_at: it.published_at,
       fetched_at: new Date().toISOString(),
+      origin,
     }))
   if (rows.length === 0) return 0
   const { error } = await supabaseService()
     .from('content_research_items')
-    .upsert(rows, { onConflict: 'account_id,url' })
+    .upsert(rows, { onConflict: 'account_id,url', ignoreDuplicates: origin === 'chat' })
   if (error) throw new Error(`upsertResearchItems failed: ${error.message}`)
   return rows.length
 }
@@ -65,7 +75,7 @@ export async function lastResearchAt(accountId: string): Promise<string | null> 
 
 export async function listResearchItems(
   accountId: string,
-  opts: { limit?: number; sinceDays?: number } = {},
+  opts: { limit?: number; sinceDays?: number; origin?: ResearchOrigin } = {},
 ): Promise<ResearchRow[]> {
   let q = supabaseService()
     .from('content_research_items')
@@ -77,7 +87,23 @@ export async function listResearchItems(
     const since = new Date(Date.now() - opts.sinceDays * 86_400_000).toISOString()
     q = q.gte('fetched_at', since)
   }
+  if (opts.origin) q = q.eq('origin', opts.origin)
   const { data, error } = await q
   if (error) throw new Error(`listResearchItems failed: ${error.message}`)
   return (data ?? []) as ResearchRow[]
+}
+
+/**
+ * What Choose and the chat's list_research draw from: daily-run items from the last
+ * 7 days, newest first, at most 3 per search. Chat searches stay out — they follow
+ * the post being drafted, not the research focus.
+ */
+export async function listDailyResearch(accountId: string): Promise<ResearchRow[]> {
+  const rows = await listResearchItems(accountId, {
+    origin: 'daily',
+    sinceDays: RESEARCH_WINDOW.sinceDays,
+    // Enough to still fill the window after the per-search cap.
+    limit: 200,
+  })
+  return pickResearchWindow(rows, RESEARCH_WINDOW)
 }

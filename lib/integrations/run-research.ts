@@ -175,7 +175,7 @@ export async function runResearchForAccount(accountId: string): Promise<Research
     )
   }
 
-  const stored = await upsertResearchItems(accountId, relevant)
+  const stored = await upsertResearchItems(accountId, relevant, 'daily')
   return { ...counts, stored }
 }
 
