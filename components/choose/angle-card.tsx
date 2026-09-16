@@ -3,8 +3,15 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, ExternalLink, X } from 'lucide-react'
-import { pickAngleAction, rejectAngleAction } from '@/app/actions/choose'
+import { pickAngleAction, rejectAngleAction, setAngleStageAction } from '@/app/actions/choose'
 import type { ChooseAngle } from '@/lib/choose/batch'
+import {
+  FUNNEL_STAGES,
+  STAGE_LABELS,
+  STAGE_LABELS_LONG,
+  STAGE_TONES,
+  type FunnelStage,
+} from '@/lib/funnel/stages'
 import { cn } from '@/lib/utils'
 
 function hostOf(url: string): string {
@@ -18,6 +25,7 @@ function hostOf(url: string): string {
 export function AngleCard({ batchId, angle }: { batchId: string; angle: ChooseAngle }) {
   const router = useRouter()
   const [rejecting, setRejecting] = useState(false)
+  const [choosingStage, setChoosingStage] = useState(false)
   const [reason, setReason] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -30,6 +38,19 @@ export function AngleCard({ batchId, angle }: { batchId: string; angle: ChooseAn
       const res = await pickAngleAction(batchId, angle.id)
       if (res.ok && res.href) router.push(res.href)
       else setMessage(res.message ?? 'Something went wrong.')
+    })
+  }
+
+  const setStage = (stage: FunnelStage) => {
+    setMessage(null)
+    startTransition(async () => {
+      const res = await setAngleStageAction(batchId, angle.id, stage)
+      if (res.ok) {
+        setChoosingStage(false)
+        router.refresh()
+      } else {
+        setMessage(res.message ?? 'Something went wrong.')
+      }
     })
   }
 
@@ -55,6 +76,44 @@ export function AngleCard({ batchId, angle }: { batchId: string; angle: ChooseAn
       )}
     >
       <div className="flex flex-wrap items-center gap-1.5">
+        {choosingStage ? (
+          FUNNEL_STAGES.map((stage) => (
+            <button
+              key={stage}
+              type="button"
+              onClick={() => setStage(stage)}
+              disabled={pending}
+              title={STAGE_LABELS_LONG[stage]}
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[11px] font-medium disabled:opacity-50',
+                stage === angle.funnel_stage
+                  ? STAGE_TONES[stage]
+                  : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200',
+              )}
+            >
+              {STAGE_LABELS[stage]}
+            </button>
+          ))
+        ) : (
+          <button
+            type="button"
+            onClick={() => setChoosingStage(true)}
+            disabled={pending}
+            title={
+              angle.funnel_stage
+                ? `${STAGE_LABELS_LONG[angle.funnel_stage]} — click to change`
+                : 'No stage yet — click to set one'
+            }
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[11px] font-medium disabled:opacity-50',
+              angle.funnel_stage
+                ? STAGE_TONES[angle.funnel_stage]
+                : 'bg-neutral-100 text-neutral-400 hover:bg-neutral-200',
+            )}
+          >
+            {angle.funnel_stage ? STAGE_LABELS[angle.funnel_stage] : 'No stage'}
+          </button>
+        )}
         <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-700">
           {angle.archetype}
         </span>

@@ -6,12 +6,16 @@ const URL_A = 'https://example.com/research-a'
 const URL_B = 'https://example.com/research-b'
 const allowed = new Set([URL_A, URL_B])
 
+// The stages the app assigned for this batch; validateBatch checks the angles against it.
+const STAGES = ['tofu', 'tofu', 'mofu']
+
 const sourced = (sources) => ({
   tribe: 'Owners of small accounting firms',
   archetype: 'Resonance',
   hook: "It's 9pm on the 3rd and the bank feed is wrong again.",
   tension: 'The job built to give freedom became the one nobody else can do.',
   why_now: 'Month-end close season.',
+  funnel_stage: 'tofu',
   provenance: 'sourced',
   sources,
   story_prompt: null,
@@ -23,6 +27,7 @@ const yourStory = (storyPrompt) => ({
   hook: 'The automation that saved nobody an hour.',
   tension: 'Tools do not fix work nobody has defined.',
   why_now: 'Everyone is buying agents this quarter.',
+  funnel_stage: 'mofu',
   provenance: 'your-story',
   sources: [],
   story_prompt: storyPrompt,
@@ -41,11 +46,11 @@ function check(name, passed, detail = '') {
   }
 }
 function rejects(name, raw, expected) {
-  const result = validateBatch(raw, allowed)
+  const result = validateBatch(raw, allowed, STAGES)
   check(name, !result.ok && result.reason.includes(expected), result.ok ? 'was accepted' : result.reason)
 }
 
-const accepted = validateBatch(valid(), allowed)
+const accepted = validateBatch(valid(), allowed, STAGES)
 check('valid batch (2 sourced + 1 your-story) accepted', accepted.ok, accepted.ok ? '' : accepted.reason)
 
 rejects('2 angles rejected', { angles: valid().angles.slice(0, 2) }, 'expected 3 angles')

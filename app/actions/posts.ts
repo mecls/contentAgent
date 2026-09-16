@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireAccountId } from '@/lib/auth/session'
+import type { FunnelStage } from '@/lib/funnel/stages'
 import {
   updatePost,
   updatePostMetrics,
@@ -17,6 +18,7 @@ export async function updatePostAction(
     hook?: string | null
     body?: string
     archetype?: string | null
+    funnel_stage?: FunnelStage | null
     status?: 'draft' | 'approved' | 'posted'
     linkedin_url?: string | null
     image_url?: string | null

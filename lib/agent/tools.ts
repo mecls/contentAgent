@@ -20,10 +20,13 @@ export const ReadSkillInput = z.object({
 export type ReadSkillInput = z.infer<typeof ReadSkillInput>
 
 // ── content writing (delegated to the fast/writer model) ─────────────────────────
+// The three keys of lib/funnel/stages.ts, written literally: zod enums need a tuple, and
+// tools.ts already declares its small closed sets this way (see status below).
 export const WriteContentInput = z.object({
   brief: z.string().min(1),
   platform: z.string().optional(),
   archetype: z.string().optional(),
+  funnel_stage: z.enum(['tofu', 'mofu', 'bofu']).optional(),
   format: z.string().optional(),
   voice: z.string().optional(),
   constraints: z.string().optional(),
@@ -37,6 +40,8 @@ export const SavePostInput = z.object({
   body: z.string().min(1),
   hook: z.string().optional(),
   archetype: z.string().optional(),
+  /** Required: every saved post belongs to a funnel stage, and the word check depends on it. */
+  funnel_stage: z.enum(['tofu', 'mofu', 'bofu']),
   format: z.string().optional(),
   status: z.enum(['draft', 'approved', 'posted']).optional(),
   skill_slug: z.string().optional(),
@@ -129,6 +134,12 @@ export const CONTENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             type: 'string',
             description: 'The narrative archetype from the skill the post should follow.',
           },
+          funnel_stage: {
+            type: 'string',
+            enum: ['tofu', 'mofu', 'bofu'],
+            description:
+              "Which funnel stage this post serves: 'tofu' (reach people who don't know the creator — broad, no jargon), 'mofu' (proof for a type of business, outcome first), 'bofu' (conversion; the only stage allowed technical detail). Use the stage from the drafting prompt when there is one.",
+          },
           format: {
             type: 'string',
             description: "Structural format, e.g. 'text-short', 'text-long', 'carousel', 'poll'.",
@@ -163,13 +174,19 @@ export const CONTENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'save_post',
       description:
-        "Save a finished post so it appears in the user's Posts library. Call this whenever you produce a post the user might publish. `body` is the full post text exactly as it should be published; `hook` is the opening line; `archetype` is which skill archetype it follows (if any). `tags` are 2-5 short lowercase keyword tags describing the post's topic and style (e.g. [\"ai\",\"hiring\",\"contrarian\"]) — REUSE the keywords from the EXISTING POST TAGS note when one fits, so engagement stays comparable across posts. The body is checked first: every number, amount, percentage, duration, clock time and weekday in it must appear in the skill, the research or search results loaded in this chat, or the creator's messages. If one doesn't, nothing is saved and the result lists the unsourced details to remove or make general. Then a model review looks for specific moments the same sources don't support: the first time it refuses and lists them; if the rewrite is still flagged, the post is saved tagged needs-fact-check and the result lists the lines to show the creator.",
+        "Save a finished post so it appears in the user's Posts library. Call this whenever you produce a post the user might publish. `body` is the full post text exactly as it should be published; `hook` is the opening line; `archetype` is which skill archetype it follows (if any). `tags` are 2-5 short lowercase keyword tags describing the post's topic and style (e.g. [\"ai\",\"hiring\",\"contrarian\"]) — REUSE the keywords from the EXISTING POST TAGS note when one fits, so engagement stays comparable across posts. The body is checked first: every number, amount, percentage, duration, clock time and weekday in it must appear in the skill, the research or search results loaded in this chat, or the creator's messages. If one doesn't, nothing is saved and the result lists the unsourced details to remove or make general. Then a model review looks for specific moments the same sources don't support: the first time it refuses and lists them; if the rewrite is still flagged, the post is saved tagged needs-fact-check and the result lists the lines to show the creator. A tofu or mofu body is also checked for infrastructure jargon (API, MCP, LLM, embeddings, LangChain, n8n, architecture/pipeline talk): if any is found nothing is saved and the result lists the exact terms to say in plain business words. Product names like ChatGPT or Claude are fine, and bofu is exempt.",
       parameters: {
         type: 'object',
         properties: {
           body: { type: 'string', description: 'The full post text, ready to publish.' },
           hook: { type: 'string', description: 'The opening line / hook.' },
           archetype: { type: 'string', description: 'Archetype name from the skill, if applicable.' },
+          funnel_stage: {
+            type: 'string',
+            enum: ['tofu', 'mofu', 'bofu'],
+            description:
+              "REQUIRED. Which funnel stage the post serves: 'tofu' (broad reach, no jargon), 'mofu' (proof for a type of business), 'bofu' (conversion; the only stage allowed technical detail). Use the stage from the drafting prompt when there is one.",
+          },
           format: {
             type: 'string',
             description:
@@ -184,7 +201,7 @@ export const CONTENT_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
               '2-5 lowercase keyword tags (topic + style). Reuse existing tags when they fit; only coin a new one when none apply.',
           },
         },
-        required: ['body'],
+        required: ['body', 'funnel_stage'],
       },
     },
   },

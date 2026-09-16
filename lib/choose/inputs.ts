@@ -2,6 +2,14 @@ import { getConfig } from '@/lib/db/config'
 import { listSkills, readSkill } from '@/lib/skills/store'
 import { listDailyResearch, type ResearchRow } from '@/lib/db/research'
 import { listPosts } from '@/lib/db/posts'
+import { getFunnelMix } from '@/lib/db/profile'
+import {
+  MIX_WINDOW_POSTS,
+  recentStageCounts,
+  type FunnelStage,
+  type StageCounts,
+  type StageMixTarget,
+} from '@/lib/funnel/stages'
 import type { ChooseBatch } from '@/lib/choose/batch'
 
 /**
@@ -16,6 +24,7 @@ export const GENERATION_LOCK_MS = 120_000
 export interface RecentPost {
   hook: string | null
   archetype: string | null
+  funnel_stage: FunnelStage | null
   status: string
   posted_at: string | null
 }
@@ -65,14 +74,19 @@ export interface GenerationInputs {
   research: ResearchRow[]
   posts: RecentPost[]
   current: ChooseBatch | null
+  /** The account's target funnel mix, defaulting to 60/30/10. */
+  mix: StageMixTarget
+  /** What the recent window already holds, so the next batch can correct it. */
+  recentCounts: StageCounts
 }
 
 export async function loadGenerationInputs(accountId: string, slug: string): Promise<GenerationInputs> {
-  const [skill, research, posts, current] = await Promise.all([
+  const [skill, research, posts, current, mix] = await Promise.all([
     readSkill(accountId, slug),
     listDailyResearch(accountId),
     listPosts(accountId),
     getCurrentBatch(accountId),
+    getFunnelMix(accountId),
   ])
   return {
     skillMd: skill.skill_md,
@@ -81,9 +95,14 @@ export async function loadGenerationInputs(accountId: string, slug: string): Pro
     posts: posts.slice(0, 10).map((p) => ({
       hook: p.hook,
       archetype: p.archetype,
+      funnel_stage: p.funnel_stage,
       status: p.status,
       posted_at: p.posted_at,
     })),
     current,
+    mix,
+    // Counted over the newest classified posts only — posts written before the funnel
+    // existed say nothing about the current balance.
+    recentCounts: recentStageCounts(posts, { limit: MIX_WINDOW_POSTS }),
   }
 }

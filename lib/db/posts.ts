@@ -1,4 +1,5 @@
 import { supabaseService } from '@/lib/supabase/service'
+import type { FunnelStage } from '@/lib/funnel/stages'
 
 /** Generated posts. Account-scoped; the account id is always server-derived. */
 
@@ -18,6 +19,8 @@ export interface PostRow {
   archetype: string | null
   /** Structural format (normalized catalog key from lib/formats/catalog.ts). */
   format: string | null
+  /** Which funnel stage the post serves. Null for posts written before the funnel, and for LinkedIn imports. */
+  funnel_stage: FunnelStage | null
   status: 'draft' | 'approved' | 'posted'
   skill_slug: string | null
   linkedin_url: string | null
@@ -32,7 +35,7 @@ export interface PostRow {
 
 /** Columns selected for a full PostRow. */
 const POST_COLUMNS =
-  'id, conversation_id, hook, body, archetype, format, status, skill_slug, linkedin_url, image_url, metrics, tags, source, created_at, updated_at, posted_at'
+  'id, conversation_id, hook, body, archetype, format, funnel_stage, status, skill_slug, linkedin_url, image_url, metrics, tags, source, created_at, updated_at, posted_at'
 
 /**
  * Normalize free-form tags into stable keywords so engagement can be compared
@@ -81,6 +84,7 @@ export async function createPost(
     body: string
     archetype?: string | null
     format?: string | null
+    funnel_stage?: FunnelStage | null
     status?: 'draft' | 'approved' | 'posted'
     skill_slug?: string | null
     conversation_id?: string | null
@@ -102,6 +106,7 @@ export async function createPost(
       body: post.body,
       archetype: post.archetype ?? null,
       format: post.format ?? null,
+      funnel_stage: post.funnel_stage ?? null,
       status: post.status ?? 'draft',
       skill_slug: post.skill_slug ?? null,
       conversation_id: post.conversation_id ?? null,
@@ -128,6 +133,9 @@ export async function updatePost(
     hook: string | null
     body: string
     archetype: string | null
+    // Editable on purpose: the creator overrides a stage the agent got wrong. (`format`
+    // is missing from this list, which is why it can't be edited — separate bug.)
+    funnel_stage: FunnelStage | null
     status: 'draft' | 'approved' | 'posted'
     linkedin_url: string | null
     image_url: string | null

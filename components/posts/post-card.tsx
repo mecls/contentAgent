@@ -8,6 +8,14 @@ import {
   deletePostAction,
   updateTagsAction,
 } from '@/app/actions/posts'
+import {
+  FUNNEL_STAGES,
+  STAGE_LABELS,
+  STAGE_LABELS_LONG,
+  STAGE_TONES,
+  isFunnelStage,
+  type FunnelStage,
+} from '@/lib/funnel/stages'
 import { cn, formatDate } from '@/lib/utils'
 
 interface Metrics {
@@ -23,6 +31,8 @@ export interface PostCardData {
   hook: string | null
   body: string
   archetype: string | null
+  /** Null for posts written before the funnel existed, and for LinkedIn imports. */
+  funnelStage: FunnelStage | null
   status: 'draft' | 'approved' | 'posted'
   linkedinUrl: string | null
   imageUrl: string | null
@@ -49,6 +59,7 @@ export function PostCard({
   const [body, setBody] = useState(post.body)
   const [hook, setHook] = useState(post.hook ?? '')
   const [archetype, setArchetype] = useState(post.archetype ?? '')
+  const [funnelStage, setFunnelStage] = useState<string>(post.funnelStage ?? '')
   const [linkedinUrl, setLinkedinUrl] = useState(post.linkedinUrl ?? '')
   const [imageUrl, setImageUrl] = useState(post.imageUrl ?? '')
   const [pending, startTransition] = useTransition()
@@ -59,6 +70,7 @@ export function PostCard({
         hook,
         body,
         archetype,
+        funnel_stage: isFunnelStage(funnelStage) ? funnelStage : null,
         linkedin_url: linkedinUrl.trim() || null,
         image_url: imageUrl.trim() || null,
       })
@@ -97,6 +109,14 @@ export function PostCard({
         >
           {post.status}
         </span>
+        {post.funnelStage ? (
+          <span
+            title={STAGE_LABELS_LONG[post.funnelStage]}
+            className={cn('rounded-full px-2 py-0.5 text-xs font-medium', STAGE_TONES[post.funnelStage])}
+          >
+            {STAGE_LABELS[post.funnelStage]}
+          </span>
+        ) : null}
         {post.archetype ? (
           <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
             {post.archetype}
@@ -127,6 +147,19 @@ export function PostCard({
             placeholder="Archetype"
             className="rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-[var(--brand-accent)]"
           />
+          <select
+            value={funnelStage}
+            onChange={(e) => setFunnelStage(e.target.value)}
+            aria-label="Funnel stage"
+            className="rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-[var(--brand-accent)]"
+          >
+            <option value="">No funnel stage</option>
+            {FUNNEL_STAGES.map((stage) => (
+              <option key={stage} value={stage}>
+                {STAGE_LABELS_LONG[stage]}
+              </option>
+            ))}
+          </select>
           <input
             value={linkedinUrl}
             onChange={(e) => setLinkedinUrl(e.target.value)}

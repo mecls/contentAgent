@@ -2,6 +2,7 @@ import { supabaseService } from '@/lib/supabase/service'
 import { listSkills } from '@/lib/skills/store'
 import { platformLabel, type OnboardingProfile } from '@/lib/onboarding/schema'
 import { getConfig, setConfig } from '@/lib/db/config'
+import { FUNNEL_MIX_KEY, normalizeMix, type StageMixTarget } from '@/lib/funnel/stages'
 
 /**
  * Onboarding state + the captured profile live in the shared `config` table
@@ -41,6 +42,21 @@ export async function getResearchFocus(accountId: string): Promise<ResearchFocus
 
 export async function setResearchFocus(accountId: string, focus: ResearchFocus): Promise<void> {
   await setConfig(accountId, 'research_focus', focus)
+}
+
+/**
+ * The target funnel mix — how many of every ten posts should reach new people (tofu),
+ * prove it works (mofu), or ask for the call (bofu). Defaults to 60/30/10 in code and is
+ * overridable per account, stored in `config` under `funnel_mix` like the research focus
+ * above. `normalizeMix` accepts shares or posts-per-ten and falls back to the default, so
+ * a hand-edited row can never stop a batch.
+ */
+export async function getFunnelMix(accountId: string): Promise<StageMixTarget> {
+  return normalizeMix(await getConfig(accountId, FUNNEL_MIX_KEY))
+}
+
+export async function setFunnelMix(accountId: string, mix: StageMixTarget): Promise<void> {
+  await setConfig(accountId, FUNNEL_MIX_KEY, normalizeMix(mix))
 }
 
 /**

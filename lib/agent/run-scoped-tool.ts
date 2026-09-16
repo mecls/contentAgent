@@ -21,6 +21,7 @@ import * as posts from '@/lib/db/posts'
 import { DEFAULT_PLATFORM, normalizeFormatKey } from '@/lib/formats/catalog'
 import { reconcileScrapedMetrics } from '@/lib/integrations/reconcile'
 import { listDailyResearch, upsertResearchItems } from '@/lib/db/research'
+import { findJargon } from '@/lib/funnel/stages'
 import { exaSearch } from '@/lib/integrations/exa'
 import { listCompetitorPosts } from '@/lib/db/competitors'
 import { runResearchIfStale } from '@/lib/integrations/run-research'
@@ -101,6 +102,19 @@ export async function runScopedTool(
     // ── posts ──
     case 'save_post': {
       const input = SavePostInput.parse(rawInput)
+      // Plain words first. It's free, it needs no evidence (so it holds in headless runs
+      // too), and a body that has to be rewritten for its audience will change its
+      // numbers anyway — no point paying for the detail review on a draft that's about
+      // to be redone. Deterministic, so it can't loop: the model can always drop a word,
+      // and a post that genuinely needs the detail is bofu, which is exempt.
+      const jargon = findJargon(input.body, input.funnel_stage)
+      if (jargon.length > 0) {
+        return {
+          saved: false,
+          jargon,
+          error: `Not saved: a ${input.funnel_stage} post is read by a business owner who isn't technical, and these are infrastructure terms they won't parse: ${jargon.join(', ')}. Call write_content again with notes to say the same thing in plain business words — what it does for the person, not how it is built — then save again. Product names people actually use (ChatGPT, Claude, "AI agent") are fine. If the post genuinely needs this technical detail it is a bofu post: it must open with the business problem, and you save it with funnel_stage "bofu".`,
+        }
+      }
       // Real stories only, enforced: a number, amount, duration, clock time or weekday
       // must come from something loaded this run, or the post isn't saved; then a
       // model review looks for invented moments (below).
@@ -146,6 +160,7 @@ export async function runScopedTool(
         hook: input.hook ?? null,
         archetype: input.archetype ?? null,
         format,
+        funnel_stage: input.funnel_stage,
         status: input.status ?? 'draft',
         skill_slug: input.skill_slug ?? null,
         conversation_id: ctx.conversationId ?? null,

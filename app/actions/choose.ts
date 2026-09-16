@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAccountId } from '@/lib/auth/session'
 import { deleteConfig, setConfig } from '@/lib/db/config'
 import { LIMITS, type ChooseAngle } from '@/lib/choose/batch'
+import { isFunnelStage, type FunnelStage } from '@/lib/funnel/stages'
 import { BATCH_KEY, GENERATING_KEY, getCurrentBatch, isGenerating, pickSkill } from '@/lib/choose/inputs'
 import { generateBatch, type GenerateResult } from '@/lib/choose/generate'
 
@@ -62,7 +63,7 @@ async function updateAngle(
   accountId: string,
   batchId: string,
   angleId: string,
-  patch: Pick<ChooseAngle, 'status' | 'reject_reason'>,
+  patch: Partial<Pick<ChooseAngle, 'status' | 'reject_reason' | 'funnel_stage'>>,
 ): Promise<ChooseActionResult & { angle?: ChooseAngle }> {
   const batch = await getCurrentBatch(accountId)
   if (!batch || batch.id !== batchId) return { ok: false, message: STALE_BATCH }
@@ -84,6 +85,20 @@ export async function rejectAngleAction(
     return { ok: false, message: 'Give a reason of 1-200 characters.' }
   }
   const res = await updateAngle(accountId, batchId, angleId, { status: 'rejected', reject_reason: reason })
+  if (res.ok) revalidatePath('/app')
+  return { ok: res.ok, message: res.message }
+}
+
+/** The creator overriding the stage the app assigned — the angle keeps its text. */
+export async function setAngleStageAction(
+  batchId: string,
+  angleId: string,
+  stage: FunnelStage,
+): Promise<ChooseActionResult> {
+  const { accountId } = await requireAccountId()
+  // The stage arrives from the browser, so it is never trusted.
+  if (!isFunnelStage(stage)) return { ok: false, message: 'Unknown stage.' }
+  const res = await updateAngle(accountId, batchId, angleId, { funnel_stage: stage })
   if (res.ok) revalidatePath('/app')
   return { ok: res.ok, message: res.message }
 }

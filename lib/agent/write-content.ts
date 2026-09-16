@@ -1,4 +1,5 @@
 import { openai, llmModelFast, llmMaxTokens } from './llm'
+import { stageBriefText } from '@/lib/funnel/stages'
 import type { WriteContentInput } from './tools'
 
 /**
@@ -20,6 +21,8 @@ PLAIN TEXT ONLY: the body is pasted directly into the platform composer (LinkedI
 
 NO STAGE DIRECTIONS: never include placeholders or art direction like "[image here]", "[insert chart]", or "[Before: screenshot]". Output only the words of the post.
 
+WHO IS READING (the funnel stage): the brief names a funnel stage. Unless it says bofu, the reader is a business owner who is not technical — write in plain words and use no infrastructure terms (API, MCP, LLM, RAG, embeddings, tokens, vector databases, fine-tuning, tool names like LangChain or n8n, or architecture/pipeline talk). Say what the thing does for the person, not how it is built. Product names people actually use — ChatGPT, Claude, "AI agent" — are fine. A bofu post may carry technical detail, but it still opens with the business problem.
+
 HONESTY: never invent the creator's own customers, clients, metrics, or case studies. Use only the facts in the brief and source material. Use only the stories, events, facts and concrete details in the brief and source material. Never invent a story, event, conversation, quote or moment, and never invent specific scenarios addressed to the reader (unit numbers, incidents, times, dollar amounts). If the brief needs one that isn't provided, leave it out or write a plain general statement rather than make one up.
 
 Output the post body only. No preamble, no sign-off about what you did, no surrounding quotes.`
@@ -30,6 +33,9 @@ function buildWriterBrief(input: WriteContentInput): string {
     input.platform ? `Platform: ${input.platform}` : '',
     input.format ? `Format: ${input.format}` : '',
     input.archetype ? `Archetype / narrative angle: ${input.archetype}` : '',
+    input.funnel_stage
+      ? `\nFUNNEL STAGE — ${input.funnel_stage.toUpperCase()}:\n${stageBriefText(input.funnel_stage)}`
+      : '',
     '',
     `WHAT THE POST MUST SAY:\n${input.brief}`,
     input.voice

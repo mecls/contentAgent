@@ -2,6 +2,15 @@ import { FileText } from 'lucide-react'
 import { requireAccountId } from '@/lib/auth/session'
 import { listPosts } from '@/lib/db/posts'
 import { PostsView } from '@/components/posts/posts-view'
+import {
+  DEFAULT_MIX,
+  FUNNEL_STAGES,
+  MIX_WINDOW_DAYS,
+  STAGE_LABELS_LONG,
+  STAGE_TONES,
+  stageMix,
+  withinDays,
+} from '@/lib/funnel/stages'
 import { cn } from '@/lib/utils'
 
 export default async function PostsPage() {
@@ -11,6 +20,10 @@ export default async function PostsPage() {
   const posted = posts.filter((p) => p.status === 'posted').length
   const approved = posts.filter((p) => p.status === 'approved').length
   const drafts = posts.filter((p) => p.status === 'draft').length
+
+  // The funnel balance for the week. Posts written before the funnel existed carry no
+  // stage and are skipped, so this reads empty until a few new ones land.
+  const mix = stageMix(withinDays(posts, MIX_WINDOW_DAYS))
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -28,6 +41,37 @@ export default async function PostsPage() {
               {approved > 0 ? <Stat label="Approved" value={approved} tone="approved" /> : null}
               <Stat label="Drafts" value={drafts} tone="draft" />
               <span className="text-xs text-neutral-400">{posts.length} total</span>
+            </div>
+          ) : null}
+          {posts.length > 0 ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {mix.total === 0 ? (
+                <span className="text-xs text-neutral-400">
+                  No post from the last {MIX_WINDOW_DAYS} days has a funnel stage yet.
+                </span>
+              ) : (
+                <>
+                  {FUNNEL_STAGES.map((stage) => (
+                    <span
+                      key={stage}
+                      title={`${STAGE_LABELS_LONG[stage]} — target ${Math.round(DEFAULT_MIX[stage] * 100)}%`}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+                        STAGE_TONES[stage],
+                      )}
+                    >
+                      <span className="tabular-nums">{mix.counts[stage]}</span>
+                      <span className="font-normal opacity-80">
+                        {STAGE_LABELS_LONG[stage]} · {Math.round(mix.shares[stage] * 100)}%
+                      </span>
+                    </span>
+                  ))}
+                  <span className="text-xs text-neutral-400">
+                    last {MIX_WINDOW_DAYS} days · target{' '}
+                    {FUNNEL_STAGES.map((stage) => Math.round(DEFAULT_MIX[stage] * 100)).join('/')}
+                  </span>
+                </>
+              )}
             </div>
           ) : null}
         </header>
@@ -50,6 +94,7 @@ export default async function PostsPage() {
               hook: p.hook,
               body: p.body,
               archetype: p.archetype,
+              funnelStage: p.funnel_stage,
               status: p.status,
               linkedinUrl: p.linkedin_url,
               imageUrl: p.image_url,
